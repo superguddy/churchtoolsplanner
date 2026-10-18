@@ -1,0 +1,4 @@
+# Nur fuer Tests (nicht fuer den Betrieb)
+-r requirements.txt
+pytest
+python-multipart

@@ -15,7 +15,7 @@ const state = {
   view: null,          // letzte gueltige /api/view-Antwort
   viewSeq: 0,
   statsSeq: 0,
-  pending: new Map(),  // request_id -> {person_id, name} | {person_id: null}
+  pending: new Map(),  // request_id -> {person_id (null = austragen), name, expected (Person beim Laden)}
   selectedPersonId: null,
   saving: false,
 };
@@ -290,10 +290,12 @@ function renderPersons(loadingText) {
         e.dataTransfer.effectAllowed = 'move';
       },
     },
-    el('span', { class: 'name' }, p.name),
+    el('span', { class: 'name', title: p.rule.note || null }, p.name, p.rule.note ? ' ✎' : ''),
     p.absent && badge('abwesend', 'absent'),
-    !p.absent && p.rule_blocked && badge('Regel', 'rule'),
-    !p.rule_blocked && p.only_sunday && badge('nur So'),
+    p.rule_blocked && badge(`Regel: ${p.rule_reason}`, 'absent'),
+    !p.rule_blocked && p.rule_reason && badge(p.rule_reason),
+    p.limit_reached && badge(`Limit ${p.month_count}/${p.rule.max_per_month}`, 'rule'),
+    p.in_event.length > 0 && badge(`schon: ${p.in_event.join(', ')}`, 'pending'),
     el('span', { class: 'last', title: 'Letzter Einsatz in diesen Diensten' }, p.last_date ? fmtDate(p.last_date) : '–'));
     return li;
   }));
@@ -305,6 +307,7 @@ function personLine(person) {
     el('span', { class: person.external ? 'extern' : '' }, person.name),
     person.external && ' (extern)',
     person.absent && ' ', person.absent && badge('abwesend', 'absent'),
+    person.rule_reason && ' ', person.rule_reason && badge(`Regel: ${person.rule_reason}`, 'absent'),
     person.agreed === false && ' ', person.agreed === false && badge('angefragt', 'pending'));
 }
 
@@ -339,7 +342,8 @@ function renderServices(loadingText) {
     if (change) {
       const p = change.person_id != null ? byId.get(change.person_id) : null;
       person = change.person_id == null ? null
-        : { id: change.person_id, name: change.name, absent: !!(p && p.absent), external: false };
+        : { id: change.person_id, name: change.name, absent: !!(p && p.absent), external: false,
+            rule_reason: p && p.rule_blocked ? p.rule_reason : null };
     }
     const li = el('li', {
       class: [change ? 'changed' : '', selected ? 'can-assign' : ''].join(' '),
@@ -376,10 +380,16 @@ function assign(row, person) {
     alert('Dieser Dienst ist im Event nicht vorhanden und kann daher nicht geplant werden.');
     return;
   }
-  if (person.rule_blocked) { alert('Regel verletzt: Person kann nur sonntags eingeplant werden.'); return; }
   if (person.absent) { alert('Diese Person ist am Event-Tag als abwesend eingetragen.'); return; }
+  if (person.rule_blocked) {
+    alert(`Regel: ${person.name} – ${person.rule_reason}.\nÄndern unter „Regeln“.`);
+    return;
+  }
+  const already = person.in_event.filter((label) => !(row.person && row.person.id === person.id && label === row.label));
+  if (already.length && !confirm(`${person.name} ist in diesem Event schon eingeteilt (${already.join(', ')}). Trotzdem einteilen?`)) return;
+  if (person.limit_reached && !confirm(`${person.name} hat das Monatslimit erreicht (${person.month_count}/${person.rule.max_per_month}). Trotzdem einteilen?`)) return;
   if (row.person && row.person.id === person.id) state.pending.delete(row.request_id);
-  else state.pending.set(row.request_id, { person_id: person.id, name: person.name });
+  else state.pending.set(row.request_id, { person_id: person.id, name: person.name, expected: row.person ? row.person.id : null });
   state.selectedPersonId = null;
   renderPersons();
   renderServices();
@@ -388,7 +398,7 @@ function assign(row, person) {
 function unassign(row) {
   if (!row.request_id) return;
   if (!row.person) state.pending.delete(row.request_id);
-  else state.pending.set(row.request_id, { person_id: null });
+  else state.pending.set(row.request_id, { person_id: null, expected: row.person.id });
   renderServices();
 }
 
@@ -401,7 +411,9 @@ $('discardBtn').addEventListener('click', () => {
 $('saveBtn').addEventListener('click', async () => {
   const eventId = state.eventId;
   if (!eventId || state.pending.size === 0) return;
-  const changes = [...state.pending].map(([request_id, c]) => ({ request_id, person_id: c.person_id }));
+  const changes = [...state.pending].map(([request_id, c]) => ({
+    request_id, person_id: c.person_id, expected_person_id: c.expected ?? null,
+  }));
   state.saving = true;
   setStatus('Speichern …');
   updateSaveBar();
@@ -435,7 +447,14 @@ function openContextMenu(e, person) {
   e.preventDefault();
   menuPerson = person;
   const menu = $('contextMenu');
-  menu.querySelector('[data-action=sunday] .tick').textContent = person.only_sunday ? '✓' : '';
+  const ev = state.view && state.view.event;
+  const dayItem = menu.querySelector('[data-action=weekday]');
+  dayItem.hidden = !ev || ev.weekday == null;
+  if (ev && ev.weekday != null) {
+    const blocked = person.rule.blocked_weekdays.includes(ev.weekday);
+    dayItem.querySelector('.tick').textContent = blocked ? '✓' : '';
+    dayItem.querySelector('.text').textContent = `Nie am ${ev.weekday_name} einplanen`;
+  }
   menu.hidden = false;
   const x = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8);
   const y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8);
@@ -454,9 +473,15 @@ $('contextMenu').addEventListener('click', async (e) => {
   if (action === 'copy') {
     try { await navigator.clipboard.writeText(String(person.id)); setStatus(`Person-Id ${person.id} kopiert.`); }
     catch (_) { window.prompt('Person-Id:', String(person.id)); }
-  } else if (action === 'sunday') {
-    await api(`/api/rules/${person.id}`, { method: 'POST', body: { only_sunday: !person.only_sunday } });
+  } else if (action === 'weekday') {
+    const day = state.view.event.weekday;
+    const rule = person.rule;
+    const days = rule.blocked_weekdays.includes(day)
+      ? rule.blocked_weekdays.filter((d) => d !== day) : [...rule.blocked_weekdays, day];
+    await api(`/api/rules/${person.id}`, { method: 'PUT', body: { ...rule, blocked_weekdays: days } });
     refreshView();
+  } else if (action === 'rules') {
+    window.location.href = `/regeln#p${person.id}`;
   }
 });
 

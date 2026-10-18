@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Regeln – ChurchTools Planer</title>
+  <link rel="stylesheet" href="/static/style.css?v=2.1.0">
+</head>
+<body>
+  <header class="topbar">
+    <h1>ChurchTools – Regeln</h1>
+    <span id="userInfo" class="muted"></span>
+    <nav class="nav"><a href="/">Planung</a><a href="/regeln" class="active">Regeln</a></nav>
+    <span class="spacer"></span>
+    <span id="saveState" class="muted"></span>
+  </header>
+
+  <main class="rulespage">
+    <section class="card wide">
+      <p class="muted">
+        Regeln gelten pro Person und werden in der Planung wie eine Abwesenheit gekennzeichnet.
+        Ein markierter Wochentag heisst: <strong>an diesem Tag nie einplanen</strong>.
+        Das Monatslimit ist ein Hinweis (Planung fragt nach). Änderungen werden sofort gespeichert.
+      </p>
+      <div class="filters">
+        <label>Gruppe
+          <select id="groupFilter"><option value="">Alle Gruppen</option></select>
+        </label>
+        <label>Suche <input id="search" type="search" placeholder="Name …"></label>
+        <label class="check"><input id="onlyRules" type="checkbox"> nur Personen mit Regeln</label>
+      </div>
+      <div class="tablewrap">
+        <table class="rules">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="days" title="Markierte Tage: nie einplanen">Nie einplanen am</th>
+              <th title="Höchstens so viele Einsätze pro Monat (leer = kein Limit)">Max./Monat</th>
+              <th>Notiz</th>
+              <th title="In dieser Gruppe in der Planung ausblenden">Ausgeblendet in</th>
+            </tr>
+          </thead>
+          <tbody id="rulesBody"><tr><td colspan="5" class="loading">Lade …</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/rules.js?v=2.1.0"></script>
+</body>
+</html>

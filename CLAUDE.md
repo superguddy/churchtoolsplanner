@@ -1,0 +1,73 @@
+# CLAUDE.md – ChurchTools Planer (FEG Sulgen)
+
+Kontextdatei für Claude Code. Mit dem Nutzer auf Deutsch kommunizieren. Am Ende einer Arbeitssitzung
+den Abschnitt „Aktueller Stand“ aktualisieren.
+
+## Was das Projekt ist
+Planungswerkzeug für die Technik-Dienste (Ton, Bild, Podcast inkl. Praktikanten) der FEG Sulgen auf
+ChurchTools (`https://feg-sulgen.church.tools`). Personen einer Gruppe werden per Ziehen oder Klick auf
+Dienst-Anfragen eines Events eingeteilt; Abwesenheiten, Personen-Regeln, Rotation (letzter Einsatz)
+und eine Einsatz-Statistik helfen bei der Auswahl.
+
+Nachfolger der WPF/C#-App `ChurchToolsPlanner.UI` (nicht in diesem Repo). Technisch aufgebaut wie das
+Schwesterprojekt ChurchTranslation (`superguddy/churchtranslation`): lokaler FastAPI/uvicorn-Server,
+Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
+
+## Aufbau
+- `app.py` – FastAPI-App: Config, Sitzung/Cache, alle `/api/*`-Routen, Start (`main()`).
+- `ct_api.py` – ChurchTools-REST-Client (httpx, Cookie-Login, Paging, CSRF-Token fail-open,
+  automatische Neuanmeldung bei 401).
+- `planner.py` – reine Planungslogik ohne Netzwerk (Dienst-Zuordnung, Abwesenheiten, Statistik, Sortierung).
+- `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, Monatslimit, Notiz.
+- `login_store.py` – gemerkter Login, Passwort per Windows-DPAPI (ctypes), übernimmt alten C#-Login.
+- `static/` – `index.html`/`app.js` (Planung), `rules.html`/`rules.js` (Regeln), `style.css`.
+- `config_defaults/` – Startwerte für `rules.json`/`hidden_persons.json` (nur beim ersten Start kopiert).
+- `tests/` – pytest; `fake_ct.py` = simulierter ChurchTools-Server (Login test/test).
+
+## Laufzeit und Pfade
+- Laufzeit-Ordner `C:\ChurchToolsPlanner\Tool` (`TOOL_DIR`, überschreibbar mit `CT_PLANNER_TOOL_DIR`;
+  außerhalb Windows `./Tool`). Dort: `.venv`, `config.json`, `rules.json`, `hidden_persons.json`, `login.json`.
+  Diese Dateien werden nie aus dem Repo überschrieben; `Tool/` ist in `.gitignore`.
+- Start: `start.bat` → `start_console.bat` (legt bei Bedarf `.venv` über `installieren.bat` an) → `python app.py`.
+  Browser öffnet `http://127.0.0.1:8092/`. Config wird nur beim Start gelesen.
+- Server lauscht nur auf 127.0.0.1, weil er die ChurchTools-Anmeldung hält. Middleware prüft den Host
+  (DNS-Rebinding) und verlangt für schreibende `/api/*`-Aufrufe den Header `X-Planner: 1`.
+
+## Wichtige Designentscheidungen (nicht zurückbauen)
+- **Eine Ansicht pro Auswahl:** `GET /api/view?group_id&event_id` liefert Event, Dienste und Personen
+  zusammen. Das Frontend nummeriert Anfragen (`viewSeq`) und verwirft veraltete Antworten; die rechte
+  Spalte wird beim Event-Wechsel sofort geleert. Das behebt den Fehler der WPF-Version (alte
+  Einteilungen eines anderen Events blieben rechts stehen).
+- **`isValid=false`** in `eventServices` = abgesagte/ersetzte Anfrage → ignorieren (Anzeige + Statistik).
+- **Speichern** schickt nur Änderungen, jeweils mit `expected_person_id`; weicht der aktuelle CT-Stand ab,
+  wird diese Änderung nicht geschrieben, sondern als Fehler gemeldet.
+- Regeln blockieren wie Abwesenheiten (Wochentag); Monatslimit und „schon im Event eingeteilt“ sind
+  nur Rückfragen.
+- Dienst-Zuordnung über Namen: längster passender Präfix aus `info_services`/`plannable_services`
+  plus `service_aliases` (config.json). Welche Dienste für Statistik/Rotation einer Gruppe zählen:
+  `group_services` (Gruppenname enthält Schlüssel).
+
+## Tests
+- `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
+- Browser-Tests (`tests/test_e2e_browser.py`) brauchen `playwright` + Chromium, sonst übersprungen.
+  In Cloud-Sessions: Chromium unter `/opt/pw-browsers/chromium`, kein `playwright install`.
+- Gegen das echte ChurchTools kann aus der Cloud nicht getestet werden (kein Zugang/Login).
+
+## Konventionen
+- Versionsnummer `APP_VERSION` in `app.py`, Kopfzeile `requirements.txt` und Cache-Buster `?v=` in
+  `static/*.html` gemeinsam anheben.
+- Code-Kommentare und UI-Texte auf Deutsch (UI mit Umlauten, Code-Kommentare ohne).
+- Neue Logik möglichst in `planner.py`/`rules.py` (testbar ohne Netzwerk), `app.py` nur verdrahten.
+- Keine Zugangsdaten oder Inhalte aus `Tool/` in Ausgaben oder Commits übernehmen.
+
+## Offene Punkte / zu prüfen am echten ChurchTools
+- „Entfernen“ ruft `POST /api/events/{id}/servicerequests/{rid}/decline` auf (wie die WPF-App). Annahme:
+  danach erscheint die Anfrage mit `isValid=false`. An einem Test-Event prüfen.
+- CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
+- Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
+
+## Aktueller Stand (18.10.2026)
+- V2.1.0: Regel-Seite (Wochentage, Monatslimit, Notiz, Ausblenden je Gruppe), Hinweis bei Doppel-
+  Einteilung, Konfliktprüfung beim Speichern, automatische Neuanmeldung. 23 Tests grün (inkl. 4 Browser-Tests).
+- V2.0.0: Portierung von C#/WPF nach Python/FastAPI, Fix der veralteten Event-Anzeige.
+- Noch nicht am echten ChurchTools getestet.

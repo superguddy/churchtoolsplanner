@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChurchTools Planer</title>
-  <link rel="stylesheet" href="/static/style.css?v=2.0.0">
+  <link rel="stylesheet" href="/static/style.css?v=2.1.0">
 </head>
 <body>
   <header class="topbar">
     <h1>ChurchTools – Planung</h1>
     <span id="userInfo" class="muted"></span>
+    <nav class="nav"><a href="/" class="active">Planung</a><a href="/regeln">Regeln</a></nav>
     <span class="spacer"></span>
     <button id="reloadBtn" class="secondary" hidden title="Daten neu von ChurchTools laden">Neu laden</button>
     <button id="logoutBtn" class="secondary" hidden>Abmelden</button>
@@ -70,10 +71,11 @@
   </main>
 
   <ul id="contextMenu" class="contextmenu" hidden>
-    <li data-action="copy">Person-Id kopieren</li>
-    <li data-action="sunday"><span class="tick"></span>Nur Sonntag</li>
+    <li data-action="copy"><span class="tick"></span>Person-Id kopieren</li>
+    <li data-action="weekday"><span class="tick"></span><span class="text">Nie an diesem Wochentag</span></li>
+    <li data-action="rules"><span class="tick"></span>Regeln bearbeiten …</li>
   </ul>
 
-  <script src="/static/app.js?v=2.0.0"></script>
+  <script src="/static/app.js?v=2.1.0"></script>
 </body>
 </html>

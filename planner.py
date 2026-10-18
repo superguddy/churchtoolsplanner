@@ -296,3 +296,26 @@ def sort_persons(persons: list[dict]) -> list[dict]:
         p["last_date"] or "",
         p["name"].lower(),
     ))
+
+
+def event_person_services(event: dict, service_names: dict[int, str], settings: PlannerSettings) -> dict[int, list[str]]:
+    """PersonId -> Dienste, fuer die die Person in diesem Event schon (gueltig) eingetragen ist."""
+    out: dict[int, list[str]] = {}
+    for es in event.get("eventServices") or []:
+        if not isinstance(es, dict) or not service_entry_is_current(es):
+            continue
+        pid, _ = service_entry_person(es)
+        if not pid:
+            continue
+        sid = es.get("serviceId")
+        label = service_label(es, service_names, settings) or service_names.get(sid) or "Dienst"
+        out.setdefault(pid, []).append(label)
+    return out
+
+
+def counts_in_month(history: list[tuple[date, int]], year: int, month: int) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for day, pid in history:
+        if day.year == year and day.month == month:
+            counts[pid] = counts.get(pid, 0) + 1
+    return counts

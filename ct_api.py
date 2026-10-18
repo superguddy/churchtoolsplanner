@@ -25,17 +25,28 @@ class ChurchToolsClient:
         self._client = httpx.Client(base_url=self.base_url, timeout=timeout, follow_redirects=True)
         self._csrf_token: str | None = None
         self._lock = threading.Lock()
+        self._credentials: tuple[str, str] | None = None  # nur im Arbeitsspeicher, fuer Neuanmeldung
         self.person_id: int | None = None
 
     def close(self) -> None:
         self._client.close()
 
     # ------------------------------------------------------------------ Basis
-    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
             return self._client.request(method, path, **kwargs)
         except httpx.HTTPError as exc:
             raise ChurchToolsError(f"Verbindung zu ChurchTools fehlgeschlagen: {exc}") from exc
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        resp = self._send(method, path, **kwargs)
+        # CT-Sitzungen laufen nach einigen Stunden ab: einmal still neu anmelden und wiederholen.
+        if resp.status_code == 401 and self._credentials:
+            self.login(*self._credentials)
+            if "headers" in kwargs and "CSRF-Token" in kwargs["headers"]:
+                kwargs["headers"] = {**kwargs["headers"], **self._write_headers()}
+            resp = self._send(method, path, **kwargs)
+        return resp
 
     def _get_json(self, path: str, params: dict[str, Any] | None = None) -> dict:
         resp = self._request("GET", path, params=params)
@@ -82,9 +93,11 @@ class ChurchToolsClient:
         with self._lock:
             self._client.cookies.clear()
             self._csrf_token = None
-            resp = self._request("POST", "/api/login", data={"username": username, "password": password})
+            resp = self._send("POST", "/api/login", data={"username": username, "password": password})
             if resp.status_code >= 400:
+                self._credentials = None
                 raise ChurchToolsError("Login fehlgeschlagen. Bitte Benutzername/Passwort pruefen.")
+            self._credentials = (username, password)
             try:
                 data = resp.json().get("data") or {}
                 self.person_id = data.get("personId")

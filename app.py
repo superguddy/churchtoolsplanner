@@ -20,10 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import planner
+import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -94,30 +95,34 @@ LEGACY_LOGIN = Path(os.environ["APPDATA"]) / "ChurchToolsPlanner" / "login.json"
 LOGIN_STORE = LoginStore(TOOL_DIR / "login.json", legacy_path=LEGACY_LOGIN)
 
 
-def load_rules() -> dict[int, dict]:
-    data = _read_json(RULES_PATH, {})
-    persons = (data.get("persons") or data.get("Persons") or []) if isinstance(data, dict) else []
-    out: dict[int, dict] = {}
-    for r in persons:
-        r = {str(k).lower(): v for k, v in r.items()}
-        if r.get("personid"):
-            out[int(r["personid"])] = {"only_sunday": bool(r.get("onlysunday"))}
+def load_rules() -> dict[int, rules_mod.PersonRule]:
+    return rules_mod.load_rules(RULES_PATH)
+
+
+def _hidden_map() -> dict[int, set[int]]:
+    data = _read_json(HIDDEN_PATH, {})
+    if not isinstance(data, dict):
+        return {}
+    out: dict[int, set[int]] = {}
+    for gid, ids in data.items():
+        if str(gid).isdigit() and isinstance(ids, list):
+            out[int(gid)] = {int(i) for i in ids if str(i).isdigit() and int(i) > 0}
     return out
 
 
-def save_rule(person_id: int, only_sunday: bool) -> None:
-    rules = load_rules()
-    rules.setdefault(person_id, {})["only_sunday"] = only_sunday
-    data = {"persons": [{"personId": pid, "onlySunday": r["only_sunday"]} for pid, r in sorted(rules.items())]}
-    RULES_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+def set_hidden(group_id: int, person_id: int, hidden: bool) -> None:
+    data = _hidden_map()
+    ids = data.setdefault(group_id, set())
+    (ids.add if hidden else ids.discard)(person_id)
+    out = {str(g): sorted(v) for g, v in sorted(data.items()) if v}
+    tmp = HIDDEN_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    tmp.replace(HIDDEN_PATH)
 
 
 def hidden_ids(group_id: int) -> set[int]:
     """hidden_persons.json: {"<groupId>": [personId, ...]} – wird bei jedem Aufruf neu gelesen."""
-    data = _read_json(HIDDEN_PATH, {})
-    if not isinstance(data, dict):
-        return set()
-    return {int(i) for i in (data.get(str(group_id)) or []) if str(i).isdigit() and int(i) > 0}
+    return _hidden_map().get(group_id, set())
 
 
 # ====================================================================== Sitzung + Cache
@@ -189,11 +194,15 @@ def group_or_404(group_id: int) -> dict:
     return group
 
 
-def group_persons(group_id: int) -> list[dict]:
+def all_group_persons(group_id: int) -> list[dict]:
     client = SESSION.require()
     members = SESSION.cached(("members", group_id), lambda: client.get_group_members(group_id))
+    return planner.members_to_persons(members)
+
+
+def group_persons(group_id: int) -> list[dict]:
     hidden = hidden_ids(group_id)
-    return [p for p in planner.members_to_persons(members) if p["id"] not in hidden]
+    return [p for p in all_group_persons(group_id) if p["id"] not in hidden]
 
 
 def group_absences(group_id: int) -> list[dict]:
@@ -249,6 +258,11 @@ async def ct_error(_: Request, exc: ChurchToolsError):
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(APP_DIR / "static" / "index.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/regeln")
+def rules_page() -> FileResponse:
+    return FileResponse(APP_DIR / "static" / "rules.html", headers={"Cache-Control": "no-store"})
 
 
 # ---------------------------------------------------------------------- Login
@@ -346,13 +360,22 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
     if group_id and day:
         absent = planner.absent_person_ids(group_absences(group_id), day)
 
+    rules = load_rules()
     view: dict[str, Any] = {"group_id": group_id, "event_id": event_id, "event": None,
                             "info": [], "services": [], "persons": []}
+    in_event: dict[int, list[str]] = {}
     if event:
         info, services = planner.build_event_rows(event, service_names(), SETTINGS, absent)
+        for row in [*info, *services]:
+            p = row.get("person")
+            rule = rules.get(p["id"]) if p and p.get("id") else None
+            if rule and rule.blocks(day):
+                p["rule_reason"] = rule.summary()
+        in_event = planner.event_person_services(event, service_names(), SETTINGS)
         view["event"] = {"id": event_id, "display": planner.event_display(event, SETTINGS.tz),
                          "date": day.isoformat() if day else None,
-                         "is_sunday": bool(day and day.weekday() == 6)}
+                         "weekday": day.weekday() if day else None,
+                         "weekday_name": rules_mod.WEEKDAYS[day.weekday()] if day else None}
         view["info"], view["services"] = info, services
 
     if group_id:
@@ -361,16 +384,20 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
         relevant = SETTINGS.relevant_labels_for_group(group.get("name"))
         history = planner.assignments(service_history(), service_names(), SETTINGS, relevant)
         last = planner.last_assignment_dates(history, {p["id"] for p in persons})
-        rules = load_rules()
-        is_sunday = bool(day and day.weekday() == 6)
+        month_counts = planner.counts_in_month(history, day.year, day.month) if day else {}
         rows = []
         for p in persons:
-            only_sunday = rules.get(p["id"], {}).get("only_sunday", False)
+            rule = rules.get(p["id"]) or rules_mod.PersonRule(p["id"])
+            count = month_counts.get(p["id"], 0)
             rows.append({
                 **p,
                 "absent": p["id"] in absent,
-                "only_sunday": only_sunday,
-                "rule_blocked": bool(only_sunday and day and not is_sunday),
+                "rule": rule.to_api(),
+                "rule_blocked": rule.blocks(day),
+                "rule_reason": rule.summary(),
+                "month_count": count,
+                "limit_reached": bool(day and rule.max_per_month and count >= rule.max_per_month),
+                "in_event": in_event.get(p["id"], []),
                 "last_date": last[p["id"]].isoformat() if p["id"] in last else None,
             })
         view["persons"] = planner.sort_persons(rows)
@@ -394,19 +421,65 @@ def api_stats(group_id: int) -> dict:
             "as_of": datetime.now(SETTINGS.tz).strftime("%d.%m.%Y %H:%M")}
 
 
+# ---------------------------------------------------------------------- Regel-Seite
+@app.get("/api/rules")
+def api_rules() -> dict:
+    """Alle Personen der erlaubten Gruppen (auch ausgeblendete) mit ihren Regeln."""
+    SESSION.require()
+    rules = load_rules()
+    hidden = _hidden_map()
+    groups = api_groups()
+    persons: dict[int, dict] = {}
+    for g in groups:
+        for p in all_group_persons(g["id"]):
+            entry = persons.setdefault(p["id"], {**p, "groups": [], "hidden_in": []})
+            entry["groups"].append(g["id"])
+            if p["id"] in hidden.get(g["id"], set()):
+                entry["hidden_in"].append(g["id"])
+    rows = []
+    for p in sorted(persons.values(), key=lambda x: x["name"].lower()):
+        rule = rules.get(p["id"]) or rules_mod.PersonRule(p["id"])
+        rows.append({**p, "rule": rule.to_api()})
+    return {"groups": groups, "persons": rows, "weekdays": rules_mod.WEEKDAYS}
+
+
 class RuleBody(BaseModel):
-    only_sunday: bool
+    blocked_weekdays: list[int] = []
+    max_per_month: int | None = None
+    note: str = ""
 
 
-@app.post("/api/rules/{person_id}")
+@app.put("/api/rules/{person_id}")
 def api_rule(person_id: int, body: RuleBody) -> dict:
-    save_rule(person_id, body.only_sunday)
-    return {"person_id": person_id, "only_sunday": body.only_sunday}
+    rules = load_rules()
+    rule = rules_mod.PersonRule(
+        person_id,
+        {d for d in body.blocked_weekdays if 0 <= d <= 6},
+        body.max_per_month if body.max_per_month and body.max_per_month > 0 else None,
+        body.note.strip()[:500],
+    )
+    rules[person_id] = rule
+    rules_mod.save_rules(RULES_PATH, rules)
+    return {"person_id": person_id, "rule": rule.to_api()}
+
+
+class HiddenBody(BaseModel):
+    group_id: int
+    person_id: int
+    hidden: bool
+
+
+@app.post("/api/hidden")
+def api_hidden(body: HiddenBody) -> dict:
+    group_or_404(body.group_id)
+    set_hidden(body.group_id, body.person_id, body.hidden)
+    return {"ok": True}
 
 
 class Change(BaseModel):
     request_id: int
     person_id: int | None = None  # None = austragen (absagen)
+    expected_person_id: int | None = None  # Stand beim Laden; Abweichung = jemand hat in CT geaendert
 
 
 class SaveBody(BaseModel):
@@ -417,13 +490,23 @@ class SaveBody(BaseModel):
 @app.post("/api/events/{event_id}/save")
 def api_save(event_id: int, body: SaveBody) -> dict:
     client = SESSION.require()
+    SESSION.invalidate("event")  # frischer Stand, um Aenderungen anderer zu erkennen
     current = event_detail(event_id)
-    valid_ids = {es.get("id") for es in current.get("eventServices") or [] if planner.service_entry_is_current(es)}
+    entries = {es.get("id"): es for es in current.get("eventServices") or []
+               if isinstance(es, dict) and planner.service_entry_is_current(es)}
+    names = service_names()
     errors: list[str] = []
     done = 0
     for ch in body.changes:
-        if ch.request_id not in valid_ids:
+        es = entries.get(ch.request_id)
+        if es is None:
             errors.append(f"Anfrage {ch.request_id} gehoert nicht (mehr) zu diesem Event.")
+            continue
+        now_pid, now_name = planner.service_entry_person(es)
+        if now_pid != ch.expected_person_id:
+            label = planner.service_label(es, names, SETTINGS) or "Dienst"
+            errors.append(f"{label}: wurde inzwischen in ChurchTools geaendert (jetzt: {now_name or 'leer'}) "
+                          "- nicht ueberschrieben.")
             continue
         try:
             if ch.person_id:

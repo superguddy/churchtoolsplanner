@@ -10,6 +10,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 TODAY = date.today()
@@ -71,6 +72,18 @@ def make_events() -> dict[int, dict]:
 EVENTS = make_events()
 
 
+def reset() -> None:
+    """Testdaten auf den Ausgangszustand zuruecksetzen (zwischen Testmodulen)."""
+    EVENTS.clear()
+    EVENTS.update(make_events())
+    WRITES.clear()
+    EVENT_DELAYS.clear()
+
+
+SESSIONS: set[str] = set()
+LOGINS: list[str] = []
+
+
 @app.post("/api/login")
 def login(username: str = Form(), password: str = Form()):
     if (username, password) != ("test", "test"):
@@ -80,10 +93,32 @@ def login(username: str = Form(), password: str = Form()):
 
 @app.middleware("http")
 async def cookie(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path != "/api/login" and request.cookies.get("ChurchTools_ct") not in SESSIONS:
+        return JSONResponse({"message": "Session expired"}, status_code=401)
     resp = await call_next(request)
-    if request.url.path == "/api/login" and resp.status_code == 200:
-        resp.set_cookie("ChurchTools_ct", "ok")
+    if path == "/api/login" and resp.status_code == 200:
+        token = f"s{len(LOGINS) + 1}"
+        LOGINS.append(token)
+        SESSIONS.add(token)
+        resp.set_cookie("ChurchTools_ct", token)
     return resp
+
+
+@app.post("/test/expire")
+def expire():
+    """Simuliert eine abgelaufene CT-Sitzung."""
+    SESSIONS.clear()
+    return {"logins": len(LOGINS)}
+
+
+@app.post("/test/assign/{eid}/{rid}/{pid}")
+def external_change(eid: int, rid: int, pid: int):
+    """Simuliert eine Aenderung, die jemand anderes direkt in ChurchTools macht."""
+    for s in EVENTS[eid]["eventServices"]:
+        if s["id"] == rid:
+            s.update(personId=pid, person=person_ref(pid), name=PEOPLE[pid], agreed=True)
+    return {"ok": True}
 
 
 @app.get("/api/csrftoken")

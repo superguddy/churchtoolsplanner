@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChurchTools Planer</title>
+  <link rel="stylesheet" href="/static/style.css?v=2.0.0">
+</head>
+<body>
+  <header class="topbar">
+    <h1>ChurchTools – Planung</h1>
+    <span id="userInfo" class="muted"></span>
+    <span class="spacer"></span>
+    <button id="reloadBtn" class="secondary" hidden title="Daten neu von ChurchTools laden">Neu laden</button>
+    <button id="logoutBtn" class="secondary" hidden>Abmelden</button>
+  </header>
+
+  <section id="loginView" class="login" hidden>
+    <form id="loginForm" class="card">
+      <h2>Anmelden</h2>
+      <p class="muted" id="loginTarget"></p>
+      <label>Benutzername<input id="loginUser" autocomplete="username" required></label>
+      <label>Passwort<input id="loginPass" type="password" autocomplete="current-password"></label>
+      <p class="muted small" id="savedPwHint" hidden>Gespeichertes Passwort wird verwendet, wenn das Feld leer bleibt.</p>
+      <label class="check"><input id="loginRemember" type="checkbox"> Anmeldedaten merken</label>
+      <p id="loginError" class="error"></p>
+      <button type="submit" id="loginBtn">Anmelden</button>
+    </form>
+  </section>
+
+  <main id="mainView" class="grid" hidden>
+    <section class="col col-groups">
+      <h2>Gruppen</h2>
+      <ul id="groupsList" class="list"></ul>
+    </section>
+
+    <section class="col col-persons">
+      <div class="pane">
+        <h2>Personen <span class="muted small" id="personsHint"></span></h2>
+        <ul id="personsList" class="list persons"></ul>
+      </div>
+      <div class="pane">
+        <h2>Statistik <span class="muted small" id="statsStatus"></span></h2>
+        <div class="tablewrap">
+          <table id="statsTable">
+            <thead><tr><th>Name</th><th title="Vormonat">VMon</th><th title="Aktueller Monat">Mon</th><th title="Nächster Monat">NMon</th><th title="Seit Jahresbeginn bis heute">YTD</th><th title="Ganzes Jahr inkl. Zukunft">Jahr</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="col col-events">
+      <h2>Events</h2>
+      <ul id="eventsList" class="list"></ul>
+    </section>
+
+    <section class="col col-services">
+      <h2 id="eventTitle">Dienste</h2>
+      <h3>Info (Leitung / Lobpreisleitung / Predigt)</h3>
+      <ul id="infoList" class="list info"></ul>
+      <h3>Planbare Dienste</h3>
+      <ul id="servicesList" class="list services"></ul>
+      <div class="savebar">
+        <button id="saveBtn" disabled>Speichern</button>
+        <button id="discardBtn" class="secondary" disabled>Verwerfen</button>
+        <span id="saveStatus" class="muted"></span>
+      </div>
+    </section>
+  </main>
+
+  <ul id="contextMenu" class="contextmenu" hidden>
+    <li data-action="copy">Person-Id kopieren</li>
+    <li data-action="sunday"><span class="tick"></span>Nur Sonntag</li>
+  </ul>
+
+  <script src="/static/app.js?v=2.0.0"></script>
+</body>
+</html>

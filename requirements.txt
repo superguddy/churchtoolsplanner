@@ -1,0 +1,9 @@
+# ChurchTools Planer v2.0.0 (Python)
+# Python 3.10–3.14, Windows x64
+
+fastapi
+uvicorn
+pydantic
+httpx
+# Zeitzonen-Daten fuer Europe/Zurich (unter Windows nicht im System vorhanden)
+tzdata

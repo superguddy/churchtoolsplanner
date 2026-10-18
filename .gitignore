@@ -1,0 +1,6 @@
+# Laufzeit-Konfiguration und gespeicherter Login - niemals versionieren
+Tool/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

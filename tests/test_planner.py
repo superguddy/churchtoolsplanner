@@ -1,0 +1,78 @@
+from datetime import date
+
+import planner
+
+S = planner.PlannerSettings(
+    info_services=["Leitung", "Lobpreisleitung", "Predigt"],
+    plannable_services=["Podcast", "Ton", "Bild", "Praktikant II Podcast", "Praktikant I Tontechnik"],
+    service_aliases={"Lobpreis": "Lobpreisleitung"},
+    group_services={"Podcast": ["Podcast", "Praktikant II Podcast"], "Ton": ["Ton", "Praktikant I Tontechnik"], "Bild": ["Bild"]},
+)
+NAMES = {1: "Leitung", 2: "Lobpreis", 11: "Tontechnik", 13: "Praktikant II Podcast", 14: "Praktikant I Tontechnik"}
+
+
+def person(pid, name="X Y"):
+    return {"domainIdentifier": str(pid), "title": name}
+
+
+def test_canonical_labels_like_csharp():
+    assert S.canonical_label("Tontechnik") == "Ton"
+    assert S.canonical_label("Lobpreis") == "Lobpreisleitung"
+    assert S.canonical_label("Praktikant II Podcast") == "Praktikant II Podcast"
+    assert S.canonical_label("Praktikant I Tontechnik") == "Praktikant I Tontechnik"
+    assert S.canonical_label("Kinderhort") is None
+
+
+def test_group_relevance():
+    assert S.relevant_labels_for_group("Tontechnik") == {"Ton", "Praktikant I Tontechnik"}
+    assert S.relevant_labels_for_group("Bild-Technik") == {"Bild"}
+    assert S.relevant_labels_for_group("Sonstiges") == set(S.plannable_services)
+
+
+def test_invalid_requests_are_ignored():
+    event = {"eventServices": [
+        {"id": 5, "serviceId": 11, "personId": 7, "person": person(7, "Alt"), "isValid": False, "agreed": False},
+        {"id": 6, "serviceId": 11, "personId": None, "person": None, "isValid": True},
+    ]}
+    info, services = planner.build_event_rows(event, NAMES, S, set())
+    assert [(r["request_id"], r["person"]) for r in services] == [(6, None)]
+    assert [r["label"] for r in info] == ["Leitung", "Lobpreisleitung", "Predigt"]
+
+
+def test_slots_external_and_absent():
+    event = {"eventServices": [
+        {"id": 1, "serviceId": 11, "personId": 7, "person": person(7, "Beat"), "isValid": True, "agreed": True, "counter": 1},
+        {"id": 2, "serviceId": 11, "personId": 8, "person": person(8, "Carla"), "isValid": True, "agreed": False, "counter": 2},
+        {"id": 3, "serviceId": 2, "personId": None, "person": None, "name": "Gastband", "isValid": True},
+    ]}
+    info, services = planner.build_event_rows(event, NAMES, S, {8})
+    assert [(r["label"], r["slot"], r["person"]["name"]) for r in services] == [("Ton", "1", "Beat"), ("Ton", "2", "Carla")]
+    assert services[1]["person"]["absent"] and not services[1]["person"]["agreed"]
+    lob = info[1]
+    assert lob["person"]["external"] and lob["person"]["name"] == "Gastband"
+
+
+def test_absences_end_midnight_excluded():
+    a = [{"person": {"domainIdentifier": "9"}, "startDate": "2026-11-01", "endDate": "2026-11-02", "endTime": "2026-11-02T00:00:00Z"}]
+    assert planner.absent_person_ids(a, date(2026, 11, 1)) == {9}
+    assert planner.absent_person_ids(a, date(2026, 11, 2)) == set()
+
+
+def test_stats_and_last_dates():
+    hist = [(date(2026, 9, 6), 1), (date(2026, 10, 4), 1), (date(2026, 11, 1), 2), (date(2025, 12, 28), 1)]
+    rows = planner.person_stats(hist, [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}], date(2026, 10, 18))
+    assert rows[0] == {"id": 1, "name": "A", "last_month": 1, "current_month": 1, "next_month": 0, "year_to_date": 2, "year_full": 2}
+    assert rows[1]["next_month"] == 1 and rows[1]["year_to_date"] == 0
+    assert planner.last_assignment_dates(hist, {1, 2}) == {1: date(2026, 10, 4), 2: date(2026, 11, 1)}
+
+
+def test_month_bounds_across_year():
+    assert planner.month_bounds(date(2026, 1, 15), -1) == (date(2025, 12, 1), date(2025, 12, 31))
+    assert planner.month_bounds(date(2026, 12, 15), 1) == (date(2027, 1, 1), date(2027, 1, 31))
+
+
+def test_sort_persons():
+    ps = [{"name": "b", "absent": False, "rule_blocked": False, "last_date": "2026-10-01"},
+          {"name": "a", "absent": True, "rule_blocked": False, "last_date": None},
+          {"name": "c", "absent": False, "rule_blocked": False, "last_date": None}]
+    assert [p["name"] for p in planner.sort_persons(ps)] == ["c", "b", "a"]

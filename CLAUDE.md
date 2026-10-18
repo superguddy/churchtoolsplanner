@@ -63,6 +63,11 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   (vorher oder nachher) → wenig Einsätze im Monat → Name; vergangene Events nie. Vorgemerkte Änderungen
   werden für „neu berechnen“ als `overrides` mitgeschickt. Speichern läuft je Event über `save_changes`
   (gleiche Konfliktprüfung wie die Planung).
+- **Dienstnamen in ChurchTools** (Screenshot Nutzer 18.10.2026, Dialog „Dienst zum Event hinzufügen“):
+  Licht, Podcast, Bild, Ton, Praktikant Licht, Praktikant Bild, Praktikant Podcast, Praktikant Ton.
+  Die alten WPF-Namen („Praktikant I Tontechnik“, „Praktikant II Podcast“) bleiben als `service_aliases`.
+  `migrate_config()` stellt in einer bestehenden config.json Werte um, die noch exakt einem alten Standard
+  entsprechen (`OLD_DEFAULTS`); von Hand geänderte Werte bleiben. Licht ist nicht planbar (keine Licht-Gruppe).
 - Dienst-Zuordnung über Namen: längster passender Präfix aus `info_services`/`plannable_services`
   plus `service_aliases` (config.json). Welche Dienste für Statistik/Rotation einer Gruppe zählen:
   `group_services` (Gruppenname enthält Schlüssel).
@@ -83,10 +88,18 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 ## Offene Punkte / zu prüfen am echten ChurchTools
 - ~~„Entfernen“ = `POST .../servicerequests/{rid}/decline`~~ – vom Nutzer am echten ChurchTools bestätigt
   (wird als Absage übernommen, 18.10.2026).
+- **Dienste zu einem Event hinzufügen/entfernen** (Nutzerwunsch 18.10.2026, NICHT umgesetzt): keine
+  dokumentierte REST-Route gefunden. Im alten `churchservice/ajax` gibt es `addOrRemoveServiceToEvent`,
+  aber ChurchTools schaltet `churchservice/ajax`-Funktionen schrittweise ab (Termine 30.09./30.10.2026 laut
+  Academy „Discontinued and deleted APIs“) – nicht darauf bauen. Nächster Schritt: Nutzer liefert die
+  Anfrage, die die CT-Weboberfläche beim Speichern dieses Dialogs schickt (F12 → Netzwerk), oder die Route
+  aus `https://feg-sulgen.church.tools/api`.
 - CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.5.1: Dienstnamen an ChurchTools angepasst (Praktikant Ton/Podcast/Bild), alte Namen als Aliase,
+  automatische Umstellung alter config.json-Standardwerte. 42 Tests grün.
 - V2.5.0: Regel „Praktikant/in“ (nur Praktikanten-Dienste) inkl. Vorschlägen für Praktikanten-Dienste.
   41 Tests grün (inkl. 7 Browser-Tests).
 - V2.4.0: Gesperrte Tage je Person und verbindliches Monatslimit (Nutzerwunsch für Praktikanten:

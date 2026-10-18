@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.5.1"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -39,18 +39,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "timezone": "Europe/Zurich",
     "allowed_groups": ["Bild-Technik", "Podcast", "Tontechnik"],
     "info_services": ["Leitung", "Lobpreisleitung", "Predigt"],
-    "plannable_services": ["Podcast", "Ton", "Bild", "Praktikant II Podcast", "Praktikant I Tontechnik"],
-    "service_aliases": {"Lobpreis": "Lobpreisleitung"},
+    # Dienstnamen wie in ChurchTools ("Dienst zum Event hinzufuegen"); Licht bewusst nicht (keine Licht-Gruppe)
+    "plannable_services": ["Podcast", "Ton", "Bild", "Praktikant Podcast", "Praktikant Ton", "Praktikant Bild"],
+    # Alte Namen der WPF-App weiterhin erkennen
+    "service_aliases": {"Lobpreis": "Lobpreisleitung", "Praktikant II Podcast": "Praktikant Podcast",
+                        "Praktikant I Tontechnik": "Praktikant Ton"},
     # Gruppenname enthaelt Schluessel -> diese Dienste zaehlen fuer Statistik/Rotation
     "group_services": {
-        "Podcast": ["Podcast", "Praktikant II Podcast"],
-        "Ton": ["Ton", "Praktikant I Tontechnik"],
-        "Bild": ["Bild"],
+        "Podcast": ["Podcast", "Praktikant Podcast"],
+        "Ton": ["Ton", "Praktikant Ton"],
+        "Bild": ["Bild", "Praktikant Bild"],
     },
     # Fuer diese Dienste macht "Vorschlag" automatisch Vorschlaege (Praktikanten-Dienste bewusst nicht)
     "suggestion_services": ["Podcast", "Ton", "Bild"],
     # Praktikanten-Dienste: nur Personen mit Regel "Praktikant/in"; bekommen ebenfalls Vorschlaege
-    "intern_services": ["Praktikant I Tontechnik", "Praktikant II Podcast"],
+    "intern_services": ["Praktikant Podcast", "Praktikant Ton", "Praktikant Bild"],
     "past_event_days": 28,
     "future_event_days": 84,
     "history_days": 365,
@@ -76,11 +79,36 @@ def _seed(name: str, fallback: Any) -> Path:
     return target
 
 
+# Werte, die fruehere Versionen beim ersten Start in config.json geschrieben haben. Steht in der Datei
+# noch genau so ein alter Standard (also nie von Hand geaendert), wird er auf den neuen umgestellt.
+OLD_DEFAULTS: dict[str, list[Any]] = {
+    "plannable_services": [["Podcast", "Ton", "Bild", "Praktikant II Podcast", "Praktikant I Tontechnik"]],
+    "service_aliases": [{"Lobpreis": "Lobpreisleitung"}],
+    "group_services": [{"Podcast": ["Podcast", "Praktikant II Podcast"], "Ton": ["Ton", "Praktikant I Tontechnik"],
+                        "Bild": ["Bild"]}],
+    "intern_services": [["Praktikant I Tontechnik", "Praktikant II Podcast"]],
+}
+
+
+def migrate_config(user: dict[str, Any]) -> list[str]:
+    changed = []
+    for key, olds in OLD_DEFAULTS.items():
+        if key in user and user[key] in olds:
+            user[key] = DEFAULT_CONFIG[key]
+            changed.append(key)
+    return changed
+
+
 def load_config() -> dict[str, Any]:
     path = _seed("config.json", DEFAULT_CONFIG)
     cfg = dict(DEFAULT_CONFIG)
     user = _read_json(path, {})
     if isinstance(user, dict):
+        if migrate_config(user):
+            try:
+                path.write_text(json.dumps(user, indent=2, ensure_ascii=False), encoding="utf-8")
+            except OSError:
+                pass  # dann eben nur im Speicher umgestellt
         cfg.update({k: v for k, v in user.items() if not k.startswith("_")})
     return cfg
 

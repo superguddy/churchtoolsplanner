@@ -40,7 +40,7 @@ class PlannerSettings:
     def canonical_label(self, service_name: str | None) -> str | None:
         """Ordnet einen CT-Dienstnamen einem bekannten Label zu (laengster passender Praefix).
 
-        Beispiele: "Tontechnik" -> "Ton", "Praktikant II Podcast" -> "Praktikant II Podcast",
+        Beispiele: "Tontechnik" -> "Ton", "Praktikant Podcast" -> "Praktikant Podcast",
         "Lobpreis" -> "Lobpreisleitung".
         """
         k = normalize(service_name)

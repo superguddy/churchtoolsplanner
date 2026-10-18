@@ -115,7 +115,7 @@ def _month_of(client, event_id):
 def test_month_overview_and_save(client):
     month = _month_of(client, 1003)
     m = client.get("/api/month", params={"group_id": 41, "month": month}).json()
-    assert m["labels"] == ["Ton", "Praktikant I Tontechnik"]
+    assert m["labels"] == ["Ton", "Praktikant Ton"]
     ev = next(e for e in m["events"] if e["id"] == 1003)
     assert "2453" in ev["blocked"]                              # Anna: nur So, Event ist Mittwoch
     sug = [s for s in m["suggestions"] if s["event_id"] == 1003]
@@ -166,18 +166,29 @@ def test_blocked_date_and_hard_limit_in_view(client):
 def test_intern_rule_in_view_and_month(client):
     client.put("/api/rules/3010", headers=H, json={"intern": True, "max_per_month": 1, "limit_hard": True})
     v = client.get("/api/view", params={"group_id": 41, "event_id": 1002}).json()
-    assert v["intern_services"] == ["Praktikant I Tontechnik", "Praktikant II Podcast"]
+    assert v["intern_services"] == ["Praktikant Bild", "Praktikant Podcast", "Praktikant Ton"]
     pia = next(p for p in v["persons"] if p["id"] == 3010)
     assert pia["intern"]
     rows = {s["label"]: s for s in v["services"]}
-    praktikant = v["suggestions"].get(str(rows["Praktikant I Tontechnik"]["request_id"]))
+    praktikant = v["suggestions"].get(str(rows["Praktikant Ton"]["request_id"]))
     assert praktikant and praktikant["person_id"] == 3010
     ton = v["suggestions"].get(str(rows["Ton"]["request_id"]))
     assert not ton or ton["person_id"] != 3010
     ev = next(e for e in client.get("/api/events").json() if e["id"] == 1002)
     m = client.get("/api/month", params={"group_id": 41, "month": ev["start"][:7]}).json()
-    assert "Praktikant I Tontechnik" in m["labels"]
+    assert "Praktikant Ton" in m["labels"]
     sug = {(s["event_id"], s["request_id"]): s["person_id"] for s in m["suggestions"]}
-    assert sug.get((1002, rows["Praktikant I Tontechnik"]["request_id"])) == 3010
-    assert all(pid != 3010 or rid == rows["Praktikant I Tontechnik"]["request_id"] for (_, rid), pid in sug.items())
+    assert sug.get((1002, rows["Praktikant Ton"]["request_id"])) == 3010
+    assert all(pid != 3010 or rid == rows["Praktikant Ton"]["request_id"] for (_, rid), pid in sug.items())
     client.put("/api/rules/3010", headers=H, json={})
+
+
+def test_old_default_config_is_migrated():
+    import app
+    old = {"plannable_services": ["Podcast", "Ton", "Bild", "Praktikant II Podcast", "Praktikant I Tontechnik"],
+           "intern_services": ["Praktikant I Tontechnik", "Praktikant II Podcast"],
+           "suggestion_services": ["Podcast", "Ton"]}   # selbst angepasst -> bleibt
+    assert sorted(app.migrate_config(old)) == ["intern_services", "plannable_services"]
+    assert "Praktikant Ton" in old["plannable_services"] and old["suggestion_services"] == ["Podcast", "Ton"]
+    custom = {"plannable_services": ["Ton", "Licht"]}
+    assert app.migrate_config(custom) == [] and custom["plannable_services"] == ["Ton", "Licht"]

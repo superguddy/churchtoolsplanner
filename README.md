@@ -68,7 +68,7 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
   (für andere Dienste gesperrt wie eine Abwesenheit); Nicht-Praktikanten in Praktikanten-Diensten nur mit
   Rückfrage. Praktikanten-Dienste bekommen jetzt Vorschläge – nur aus den Praktikanten; normale Dienste nur
   aus den übrigen. Welche Dienste Praktikanten-Dienste sind: `intern_services` in config.json
-  (Standard „Praktikant I Tontechnik“, „Praktikant II Podcast“).
+  (Standard „Praktikant Ton“, „Praktikant Podcast“, „Praktikant Bild“ – wie in ChurchTools).
 
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen

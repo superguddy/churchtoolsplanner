@@ -65,5 +65,5 @@ def test_intern_flag_roundtrip(tmp_path):
     assert json.loads(p.read_text()) == {"persons": [{"personId": 7, "intern": True}]}
     r = rules.load_rules(p)[7]
     assert r.intern and r.to_api()["intern"]
-    assert r.fits_service("Praktikant I Tontechnik", {"Praktikant I Tontechnik"})
-    assert not r.fits_service("Ton", {"Praktikant I Tontechnik"})
+    assert r.fits_service("Praktikant Ton", {"Praktikant Ton"})
+    assert not r.fits_service("Ton", {"Praktikant Ton"})

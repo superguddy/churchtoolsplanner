@@ -4,11 +4,13 @@ import planner
 
 S = planner.PlannerSettings(
     info_services=["Leitung", "Lobpreisleitung", "Predigt"],
-    plannable_services=["Podcast", "Ton", "Bild", "Praktikant II Podcast", "Praktikant I Tontechnik"],
-    service_aliases={"Lobpreis": "Lobpreisleitung"},
-    group_services={"Podcast": ["Podcast", "Praktikant II Podcast"], "Ton": ["Ton", "Praktikant I Tontechnik"], "Bild": ["Bild"]},
+    plannable_services=["Podcast", "Ton", "Bild", "Praktikant Podcast", "Praktikant Ton", "Praktikant Bild"],
+    service_aliases={"Lobpreis": "Lobpreisleitung", "Praktikant II Podcast": "Praktikant Podcast",
+                     "Praktikant Ton": "Praktikant Ton"},
+    group_services={"Podcast": ["Podcast", "Praktikant Podcast"], "Ton": ["Ton", "Praktikant Ton"],
+                    "Bild": ["Bild", "Praktikant Bild"]},
 )
-NAMES = {1: "Leitung", 2: "Lobpreis", 11: "Tontechnik", 13: "Praktikant II Podcast", 14: "Praktikant I Tontechnik"}
+NAMES = {1: "Leitung", 2: "Lobpreis", 11: "Tontechnik", 13: "Praktikant Podcast", 14: "Praktikant Ton"}
 
 
 def person(pid, name="X Y"):
@@ -18,14 +20,19 @@ def person(pid, name="X Y"):
 def test_canonical_labels_like_csharp():
     assert S.canonical_label("Tontechnik") == "Ton"
     assert S.canonical_label("Lobpreis") == "Lobpreisleitung"
-    assert S.canonical_label("Praktikant II Podcast") == "Praktikant II Podcast"
-    assert S.canonical_label("Praktikant I Tontechnik") == "Praktikant I Tontechnik"
+    # Namen wie in ChurchTools ("Dienst zum Event hinzufuegen") und alte Namen der WPF-App
+    assert S.canonical_label("Praktikant Ton") == "Praktikant Ton"
+    assert S.canonical_label("Praktikant Podcast") == "Praktikant Podcast"
+    assert S.canonical_label("Praktikant Bild") == "Praktikant Bild"
+    assert S.canonical_label("Praktikant II Podcast") == "Praktikant Podcast"
+    assert S.canonical_label("Praktikant Ton") == "Praktikant Ton"
+    assert S.canonical_label("Praktikant Licht") is None and S.canonical_label("Licht") is None
     assert S.canonical_label("Kinderhort") is None
 
 
 def test_group_relevance():
-    assert S.relevant_labels_for_group("Tontechnik") == {"Ton", "Praktikant I Tontechnik"}
-    assert S.relevant_labels_for_group("Bild-Technik") == {"Bild"}
+    assert S.relevant_labels_for_group("Tontechnik") == {"Ton", "Praktikant Ton"}
+    assert S.relevant_labels_for_group("Bild-Technik") == {"Bild", "Praktikant Bild"}
     assert S.relevant_labels_for_group("Sonstiges") == set(S.plannable_services)
 
 
@@ -88,7 +95,7 @@ def test_suggestions_pick_longest_unused_and_skip_unavailable():
         {"request_id": 1, "label": "Ton", "person": None},
         {"request_id": 2, "label": "Ton", "person": None},
         {"request_id": 3, "label": "Ton", "person": {"id": 9}},            # schon besetzt
-        {"request_id": 4, "label": "Praktikant I Tontechnik", "person": None},  # nicht in labels
+        {"request_id": 4, "label": "Praktikant Ton", "person": None},  # nicht in labels
     ]
     persons = [
         _p(1, "Neu"),                                   # nie eingeteilt -> zuerst
@@ -154,13 +161,13 @@ def test_suggest_month_respects_hard_limit_and_blocked_dates():
 
 def test_intern_only_for_intern_services():
     services = [{"request_id": 1, "label": "Ton", "person": None},
-                {"request_id": 2, "label": "Praktikant I Tontechnik", "person": None}]
+                {"request_id": 2, "label": "Praktikant Ton", "person": None}]
     persons = [_p(1, "Pia", intern=True), _p(2, "Beat", "2026-10-01")]
-    labels = {"Ton", "Praktikant I Tontechnik"}
-    sug = planner.suggest_assignments(services, persons, labels, {"Praktikant I Tontechnik"})
+    labels = {"Ton", "Praktikant Ton"}
+    sug = planner.suggest_assignments(services, persons, labels, {"Praktikant Ton"})
     assert sug[1]["name"] == "Beat" and sug[2]["name"] == "Pia"   # Pia (nie dran) trotzdem nicht fuer Ton
     # ohne Praktikanten bleibt der Praktikanten-Dienst ohne Vorschlag
-    sug = planner.suggest_assignments(services, [_p(2, "Beat")], labels, {"Praktikant I Tontechnik"})
+    sug = planner.suggest_assignments(services, [_p(2, "Beat")], labels, {"Praktikant Ton"})
     assert list(sug) == [1]
 
 
@@ -168,8 +175,8 @@ def test_suggest_month_intern():
     import rules
     ev = {"id": 1, "date": date(2026, 11, 1), "absent": set(), "in_event": {},
           "rows": [{"request_id": 1, "label": "Ton", "person": None},
-                   {"request_id": 2, "label": "Praktikant I Tontechnik", "person": None}]}
+                   {"request_id": 2, "label": "Praktikant Ton", "person": None}]}
     persons = [{"id": 1, "name": "Pia"}, {"id": 2, "name": "Beat"}]
     sug = planner.suggest_month([ev], persons, [], {1: rules.PersonRule(1, intern=True)},
-                                {"Ton", "Praktikant I Tontechnik"}, {"Praktikant I Tontechnik"})
+                                {"Ton", "Praktikant Ton"}, {"Praktikant Ton"})
     assert sug[(1, 1)]["name"] == "Beat" and sug[(1, 2)]["name"] == "Pia"

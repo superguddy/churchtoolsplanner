@@ -180,5 +180,5 @@ def test_intern_flag_blocks_normal_service(page, planner_url):
     page.once("dialog", lambda d: (msgs.append(d.message), d.accept()))
     page.drag_and_drop("#personsList li:has-text('Pia Praktikantin')", "#servicesList li:has-text('Ton') >> nth=0")
     assert msgs and "Praktikanten-Dienste" in msgs[0]
-    prak = page.locator("#servicesList li", has_text="Praktikant I Tontechnik")
+    prak = page.locator("#servicesList li", has_text="Praktikant Ton")
     assert "Vorschlag: Pia Praktikantin" in prak.inner_text()

@@ -17,7 +17,8 @@ TODAY = date.today()
 SERVICES = [
     {"id": 1, "name": "Leitung"}, {"id": 2, "name": "Lobpreis"}, {"id": 3, "name": "Predigt"},
     {"id": 10, "name": "Podcast"}, {"id": 11, "name": "Tontechnik"}, {"id": 12, "name": "Bild"},
-    {"id": 13, "name": "Praktikant II Podcast"}, {"id": 14, "name": "Praktikant I Tontechnik"},
+    {"id": 13, "name": "Praktikant Podcast"}, {"id": 14, "name": "Praktikant Ton"},
+    {"id": 15, "name": "Licht"}, {"id": 16, "name": "Praktikant Licht"},
 ]
 PEOPLE = {1: "Admin Konto", 2453: "Anna Sonntag", 3001: "Beat Ton", 3002: "Carla Ton",
           3003: "Dario Ton", 3010: "Pia Praktikantin", 3662: "Versteckt Person", 4001: "Eva Podcast", 5001: "Pastor Peter"}

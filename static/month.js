@@ -295,7 +295,7 @@ function cell(ev, row, slot, counts) {
   const sug = activeSuggestion(ev, row);
   return el('div', { class: `mcell ${state.pending.has(k) ? 'changed' : ''} ${blockedNow ? 'conflict' : ''}` },
     slot ? el('span', { class: 'muted small' }, `${slot}. `) : null,
-    external ? el('span', { class: 'extern' }, `${row.person.name} (extern)`) : select,
+    external ? el('span', { class: 'extern' }, `${row.person.name} (${row.person.concealed ? 'verborgen' : 'extern'})`) : select,
     row.person && row.person.agreed === false && !state.pending.has(k) ? el('span', { class: 'badge pending' }, 'angefragt') : null,
     sug ? el('button', {
       class: 'suggestion small linklike', title: sug.reason,

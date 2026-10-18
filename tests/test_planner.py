@@ -180,3 +180,26 @@ def test_suggest_month_intern():
     sug = planner.suggest_month([ev], persons, [], {1: rules.PersonRule(1, intern=True)},
                                 {"Ton", "Praktikant Ton"}, {"Praktikant Ton"})
     assert sug[(1, 1)]["name"] == "Beat" and sug[(1, 2)]["name"] == "Pia"
+
+
+def test_concealed_person_and_new_field_names():
+    shield = {"domainIdentifier": "999", "title": "Verborgene Person", "icon": "user-shield"}
+    event = {"eventServices": [
+        {"id": 1, "serviceId": 11, "personId": 999, "person": shield, "isValid": True, "isAccepted": True, "index": 2},
+        {"id": 2, "serviceId": 11, "personId": 7, "person": person(7, "Beat"), "isValid": True, "isAccepted": False,
+         "index": 1},
+    ]}
+    _, services = planner.build_event_rows(event, NAMES, S, set())
+    assert [r["request_id"] for r in services] == [2, 1]          # nach index sortiert
+    hidden = services[1]["person"]
+    assert hidden["id"] is None and hidden["concealed"] and hidden["name"] == "Verborgene Person"
+    assert services[0]["person"]["agreed"] is False                 # isAccepted statt agreed
+    assert planner.person_id_from_ref(shield) is None
+
+
+def test_only_active_members():
+    members = [{"person": person(1, "Aktiv"), "groupMemberStatus": "active"},
+               {"person": person(2, "Wartend"), "groupMemberStatus": "waiting"},
+               {"person": person(3, "Angefragt"), "groupMemberStatus": "requested"},
+               {"person": person(4, "Alt")}]                        # ohne Status (aeltere Versionen)
+    assert [p["name"] for p in planner.members_to_persons(members)] == ["Aktiv", "Alt"]

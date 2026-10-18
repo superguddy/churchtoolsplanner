@@ -96,10 +96,21 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   damit nichts versehentlich entfernt wird. RISIKO: ChurchTools schaltet `churchservice/ajax` schrittweise
   ab (Academy „Discontinued and deleted APIs“). Fällt die Funktion weg, Fehlermeldung beachten und die neue
   Anfrage der CT-Oberfläche erneut aufzeichnen lassen. Am echten CT noch nicht über den Planer getestet.
+- **Erkenntnisse aus der offiziellen REST-Doku** (Nutzer hat 18.10.2026 nur den Bereich „Person“ der
+  openapi.json geliefert; Events/Services/Groups fehlen noch – bei Bedarf nachfordern):
+  - `EventReadAssignment`: `isAccepted` (statt veraltet `agreed`), `index` (statt veraltet `counter`),
+    `isValid=false` = abgesagt/ersetzt. Verborgene Person = Platzhalter mit `icon: "user-shield"`; dessen
+    `domainIdentifier` ist NICHT die echte Personen-ID (`planner.is_concealed`).
+  - Einteilen (PUT servicerequest) erzeugt einen neuen Datensatz mit neuer ID, der alte wird ungültig;
+    Absagen erzeugt einen neuen leeren, gültigen Datensatz. Request-IDs daher nach jedem Speichern neu laden.
+  - `GroupMember.groupMemberStatus`: active/requested/waiting/to_delete – nur `active` wird geplant.
+  - 401 liefert Text „Session expired!“; Alternative zum Cookie-Login wäre `Authorization: Login <token>`.
 - CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.6.1: Anpassungen nach REST-Doku (verborgene Personen, isAccepted/index, nur aktive Gruppenmitglieder,
+  verständliche Meldung bei veralteter Anfrage-ID). 46 Tests grün.
 - V2.6.0: „Dienste bearbeiten“ (Dienste zum Event hinzufügen/entfernen/Anzahl) in Planung und Monat.
   44 Tests grün (inkl. 8 Browser-Tests).
 - V2.5.1: Dienstnamen an ChurchTools angepasst (Praktikant Ton/Podcast/Bild), alte Namen als Aliase,

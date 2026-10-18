@@ -307,7 +307,7 @@ function personLine(person) {
   if (!person) return el('span', { class: 'muted' }, '—');
   return el('span', {},
     el('span', { class: person.external ? 'extern' : '' }, person.name),
-    person.external && ' (extern)',
+    person.external && (person.concealed ? ' (verborgen)' : ' (extern)'),
     person.absent && ' ', person.absent && badge('abwesend', 'absent'),
     person.rule_reason && ' ', person.rule_reason && badge(`Regel: ${person.rule_reason}`, 'absent'),
     person.agreed === false && ' ', person.agreed === false && badge('angefragt', 'pending'));

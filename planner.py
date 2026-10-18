@@ -86,9 +86,17 @@ def event_display(ev: dict, tz: ZoneInfo) -> str:
 
 
 # ---------------------------------------------------------------------- Personen
+def is_concealed(person: dict | None) -> bool:
+    """Platzhalter fuer eine Person, die der Benutzer nicht sehen darf (CT-Doku: icon "user-shield").
+
+    Laut ChurchTools-Doku darf dessen domainIdentifier NICHT als echte Personen-ID verwendet werden.
+    """
+    return isinstance(person, dict) and person.get("icon") == "user-shield"
+
+
 def person_id_from_ref(person: dict | None) -> int | None:
     """Liest die Personen-ID aus einem CT-DomainObject (domainIdentifier/apiUrl)."""
-    if not isinstance(person, dict):
+    if not isinstance(person, dict) or is_concealed(person):
         return None
     di = str(person.get("domainIdentifier") or "")
     m = re.search(r"\d+", di)
@@ -115,6 +123,9 @@ def members_to_persons(members: list[dict]) -> list[dict]:
     """Gruppenmitglieder -> eindeutige [{id, name}]."""
     seen: dict[int, dict] = {}
     for m in members or []:
+        # Nur aktive Mitglieder; angefragt/Warteliste/wird entfernt nicht einplanen (CT: groupMemberStatus)
+        if isinstance(m, dict) and m.get("groupMemberStatus") not in (None, "active"):
+            continue
         p = m.get("person") if isinstance(m, dict) else None
         pid = person_id_from_ref(p) or (m.get("personId") if isinstance(m, dict) else None)
         if not pid or pid <= 0 or pid in seen:
@@ -137,6 +148,8 @@ def service_entry_is_current(es: dict) -> bool:
 
 
 def service_entry_person(es: dict) -> tuple[int | None, str]:
+    if is_concealed(es.get("person")):
+        return None, person_name(es.get("person")) or "verborgen"
     pid = es.get("personId")
     if not pid:
         pid = person_id_from_ref(es.get("person"))
@@ -172,7 +185,7 @@ def build_event_rows(event: dict, service_names: dict[int, str], settings: Plann
             "request_id": es.get("id") or 0,
             "label": label,
             "person": None,
-            "counter": es.get("counter") or 0,
+            "counter": (es.get("index") if es.get("index") is not None else es.get("counter")) or 0,
         }
         if pid or name:
             row["person"] = {
@@ -180,7 +193,8 @@ def build_event_rows(event: dict, service_names: dict[int, str], settings: Plann
                 "name": name or f"Person {pid}",
                 "external": pid is None,
                 "absent": bool(pid and pid in absent_ids),
-                "agreed": bool(es.get("agreed")),
+                "agreed": bool(es.get("isAccepted", es.get("agreed"))),
+                "concealed": is_concealed(es.get("person")),
             }
         by_label.setdefault(label, []).append(row)
 

@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.6.0"
+APP_VERSION = "2.6.1"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -582,7 +582,8 @@ def save_changes(event_id: int, changes: list[Change], prefix: str = "") -> tupl
     for ch in changes:
         es = entries.get(ch.request_id)
         if es is None:
-            errors.append(f"{prefix}Anfrage {ch.request_id} gehoert nicht (mehr) zu diesem Event.")
+            errors.append(f"{prefix}Ein Dienst wurde inzwischen in ChurchTools geaendert (Anfrage {ch.request_id} "
+                          "ist nicht mehr aktuell) - bitte neu laden und erneut einteilen.")
             continue
         now_pid, now_name = planner.service_entry_person(es)
         if now_pid != ch.expected_person_id:

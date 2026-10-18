@@ -319,3 +319,34 @@ def counts_in_month(history: list[tuple[date, int]], year: int, month: int) -> d
         if day.year == year and day.month == month:
             counts[pid] = counts.get(pid, 0) + 1
     return counts
+
+
+def suggest_assignments(services: list[dict], persons: list[dict], labels: set[str]) -> dict[int, dict]:
+    """Vorschlag je offenem Dienst (request_id -> Person).
+
+    Nur Dienste aus `labels`; nie abwesende, regelgesperrte oder im Event schon eingeteilte Personen.
+    Reihenfolge: Monatslimit noch nicht erreicht, am laengsten nicht dran, wenig Einsaetze im Monat, Name.
+    Jede Person hoechstens einmal pro Event.
+    """
+    candidates = sorted(
+        (p for p in persons if not p["absent"] and not p["rule_blocked"] and not p.get("in_event")),
+        key=lambda p: (p.get("limit_reached", False), p["last_date"] or "", p.get("month_count", 0), p["name"].lower()),
+    )
+    used: set[int] = set()
+    out: dict[int, dict] = {}
+    for row in services:
+        if row.get("person") or not row.get("request_id") or row.get("label") not in labels:
+            continue
+        pick = next((p for p in candidates if p["id"] not in used), None)
+        if not pick:
+            break
+        used.add(pick["id"])
+        if pick["last_date"]:
+            y, m, d = pick["last_date"].split("-")
+            reason = f"zuletzt {d}.{m}.{y}"
+        else:
+            reason = "noch nie eingeteilt"
+        if pick.get("limit_reached"):
+            reason += ", Monatslimit erreicht"
+        out[row["request_id"]] = {"person_id": pick["id"], "name": pick["name"], "reason": reason}
+    return out

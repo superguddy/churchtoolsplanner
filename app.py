@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -47,6 +47,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "Ton": ["Ton", "Praktikant I Tontechnik"],
         "Bild": ["Bild"],
     },
+    # Fuer diese Dienste macht "Vorschlag" automatisch Vorschlaege (Praktikanten-Dienste bewusst nicht)
+    "suggestion_services": ["Podcast", "Ton", "Bild"],
     "past_event_days": 28,
     "future_event_days": 84,
     "history_days": 365,
@@ -362,7 +364,7 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
 
     rules = load_rules()
     view: dict[str, Any] = {"group_id": group_id, "event_id": event_id, "event": None,
-                            "info": [], "services": [], "persons": []}
+                            "info": [], "services": [], "persons": [], "suggestions": {}}
     in_event: dict[int, list[str]] = {}
     if event:
         info, services = planner.build_event_rows(event, service_names(), SETTINGS, absent)
@@ -402,6 +404,10 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
             })
         view["persons"] = planner.sort_persons(rows)
         view["relevant_services"] = sorted(relevant)
+        if event:
+            labels = relevant & set(CONFIG["suggestion_services"])
+            view["suggestions"] = {str(k): v for k, v in
+                                   planner.suggest_assignments(view["services"], view["persons"], labels).items()}
     return view
 
 

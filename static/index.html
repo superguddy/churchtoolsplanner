@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChurchTools Planer</title>
-  <link rel="stylesheet" href="/static/style.css?v=2.1.0">
+  <link rel="stylesheet" href="/static/style.css?v=2.2.0">
 </head>
 <body>
   <header class="topbar">
@@ -60,7 +60,7 @@
       <h2 id="eventTitle">Dienste</h2>
       <h3>Info (Leitung / Lobpreisleitung / Predigt)</h3>
       <ul id="infoList" class="list info"></ul>
-      <h3>Planbare Dienste</h3>
+      <h3 class="servicesHead">Planbare Dienste <button id="suggestBtn" class="small" hidden title="Für offene Dienste die passendste verfügbare Person vormerken (noch nicht gespeichert)">Vorschläge übernehmen</button></h3>
       <ul id="servicesList" class="list services"></ul>
       <div class="savebar">
         <button id="saveBtn" disabled>Speichern</button>
@@ -76,6 +76,6 @@
     <li data-action="rules"><span class="tick"></span>Regeln bearbeiten …</li>
   </ul>
 
-  <script src="/static/app.js?v=2.1.0"></script>
+  <script src="/static/app.js?v=2.2.0"></script>
 </body>
 </html>

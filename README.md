@@ -39,6 +39,14 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
 - Speichern überschreibt keine Änderungen, die inzwischen jemand direkt in ChurchTools gemacht hat.
 - Abgelaufene ChurchTools-Sitzung: automatische Neuanmeldung (Passwort nur im Arbeitsspeicher).
 
+## Seit 2.2.0
+- **Vorschlag für offene Dienste:** Ist eine Gruppe und ein Event gewählt, steht bei jedem offenen Dienst
+  der Gruppe ein Vorschlag („Vorschlag: Name (zuletzt …)“). Ausgewählt wird, wer am längsten nicht dran war;
+  abwesende, regelgesperrte und im Event schon eingeteilte Personen nie, Personen mit erreichtem
+  Monatslimit nur, wenn sonst niemand frei ist. „übernehmen“ bzw. „Alle Vorschläge übernehmen“ merkt nur
+  vor – gespeichert wird erst mit „Speichern“. Für welche Dienste: `suggestion_services` in config.json
+  (Standard Podcast, Ton, Bild; Praktikanten-Dienste bewusst nicht).
+
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen
 `tests/fake_ct.py`, einen simulierten ChurchTools-Server (Login test/test). Die Browser-Tests

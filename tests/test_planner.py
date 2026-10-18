@@ -76,3 +76,36 @@ def test_sort_persons():
           {"name": "a", "absent": True, "rule_blocked": False, "last_date": None},
           {"name": "c", "absent": False, "rule_blocked": False, "last_date": None}]
     assert [p["name"] for p in planner.sort_persons(ps)] == ["c", "b", "a"]
+
+
+def _p(pid, name, last=None, **kw):
+    return {"id": pid, "name": name, "absent": False, "rule_blocked": False, "last_date": last,
+            "month_count": 0, "limit_reached": False, "in_event": [], **kw}
+
+
+def test_suggestions_pick_longest_unused_and_skip_unavailable():
+    services = [
+        {"request_id": 1, "label": "Ton", "person": None},
+        {"request_id": 2, "label": "Ton", "person": None},
+        {"request_id": 3, "label": "Ton", "person": {"id": 9}},            # schon besetzt
+        {"request_id": 4, "label": "Praktikant I Tontechnik", "person": None},  # nicht in labels
+    ]
+    persons = [
+        _p(1, "Neu"),                                   # nie eingeteilt -> zuerst
+        _p(2, "Alt", "2026-09-01"),
+        _p(3, "Kuerzlich", "2026-10-10"),
+        _p(4, "Abwesend", absent=True),
+        _p(5, "Regel", rule_blocked=True),
+        _p(6, "Schon dabei", in_event=["Predigt"]),
+        _p(7, "Limit", limit_reached=True),
+    ]
+    sug = planner.suggest_assignments(services, persons, {"Ton"})
+    assert {k: v["name"] for k, v in sug.items()} == {1: "Neu", 2: "Alt"}
+    assert sug[1]["reason"] == "noch nie eingeteilt" and sug[2]["reason"] == "zuletzt 01.09.2026"
+
+
+def test_suggestion_uses_limit_person_only_as_last_resort():
+    services = [{"request_id": 1, "label": "Ton", "person": None}]
+    sug = planner.suggest_assignments(services, [_p(7, "Limit", limit_reached=True)], {"Ton"})
+    assert sug[1]["name"] == "Limit" and "Monatslimit" in sug[1]["reason"]
+    assert planner.suggest_assignments(services, [], {"Ton"}) == {}

@@ -80,8 +80,21 @@ def test_fast_event_switch_never_shows_old_services(page):
     title_contains(page, "Gottesdienst B")
     time.sleep(3.0)  # jetzt trifft die Antwort fuer A ein und muss verworfen werden
     assert "Gottesdienst B" in page.inner_text("#eventTitle")
-    services = page.inner_text("#servicesList")
-    assert "Beat Ton" not in services and "Eva Podcast" not in services and "Dario" not in services
+    # nur die eingeteilten Personen pruefen (Vorschlaege stehen in .suggestion)
+    assigned = " | ".join(page.locator("#servicesList .who > span:first-child").all_inner_texts())
+    assert "Beat Ton" not in assigned and "Eva Podcast" not in assigned and "Dario" not in assigned
+
+
+def test_suggestion_fills_open_service(page):
+    # Event B ist nach dem ersten Test gewaehlt: Ton ist offen, Vorschlag sichtbar
+    page.wait_for_selector("#suggestBtn:not([hidden])")
+    ton = page.locator("#servicesList li", has_text="Ton").first
+    assert "Vorschlag:" in ton.inner_text()
+    page.click("#suggestBtn")
+    assert "Vorschlag:" not in ton.inner_text()
+    assert page.is_hidden("#suggestBtn") and not page.is_disabled("#saveBtn")
+    page.click("#discardBtn")
+    page.wait_for_selector("#suggestBtn:not([hidden])")
 
 
 def test_assign_save_and_rule_blocking(page):

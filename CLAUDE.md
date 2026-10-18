@@ -43,6 +43,11 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   wird diese Änderung nicht geschrieben, sondern als Fehler gemeldet.
 - Regeln blockieren wie Abwesenheiten (Wochentag); Monatslimit und „schon im Event eingeteilt“ sind
   nur Rückfragen.
+- **Vorschläge** (`planner.suggest_assignments`, Feld `suggestions` in `/api/view`): nur offene Dienste
+  aus `relevant_labels_for_group ∩ suggestion_services`; Rangfolge Limit nicht erreicht → am längsten
+  nicht dran → wenig Einsätze im Monat → Name; jede Person max. einmal pro Event. Das Frontend
+  verwirft Vorschläge für Dienste/Personen mit vorgemerkten Änderungen (`activeSuggestions`) und
+  übernimmt sie nur als Vormerkung (pending), nie direkt nach ChurchTools.
 - Dienst-Zuordnung über Namen: längster passender Präfix aus `info_services`/`plannable_services`
   plus `service_aliases` (config.json). Welche Dienste für Statistik/Rotation einer Gruppe zählen:
   `group_services` (Gruppenname enthält Schlüssel).
@@ -67,6 +72,8 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.2.0: Automatischer Vorschlag für offene Dienste (pro Dienst oder alle übernehmen). 27 Tests grün
+  (inkl. 5 Browser-Tests).
 - V2.1.0: Regel-Seite (Wochentage, Monatslimit, Notiz, Ausblenden je Gruppe), Hinweis bei Doppel-
   Einteilung, Konfliktprüfung beim Speichern, automatische Neuanmeldung. 23 Tests grün (inkl. 4 Browser-Tests).
 - V2.0.0: Portierung von C#/WPF nach Python/FastAPI, Fix der veralteten Event-Anzeige.

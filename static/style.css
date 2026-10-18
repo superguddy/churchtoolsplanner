@@ -166,3 +166,8 @@ input.note { width: 100%; min-width: 160px; font: inherit; padding: 4px 6px; bor
 .hiddenin label { display: flex; gap: 4px; align-items: center; margin: 0; }
 .card input.num { display: inline-block; width: 70px; margin-top: 0; }
 .card input.note { margin-top: 0; }
+
+/* Vorschlaege */
+.servicesHead { display: flex; align-items: center; gap: 10px; }
+.suggestion { color: var(--accent); font-size: 12px; margin-left: 6px; }
+.suggestion button { padding: 0 8px; font-size: 12px; }

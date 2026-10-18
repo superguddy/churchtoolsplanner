@@ -318,6 +318,7 @@ function renderServices(loadingText) {
   const current = view && view.event_id === state.eventId ? view.event : null;
   $('eventTitle').textContent = current ? current.display : 'Dienste';
   updateSaveBar();
+  $('suggestBtn').hidden = true;
 
   if (loadingText !== undefined || !state.eventId) {
     const text = loadingText || 'Event wählen.';
@@ -336,7 +337,11 @@ function renderServices(loadingText) {
   }
   const byId = personsById();
   const selected = state.selectedPersonId != null ? byId.get(state.selectedPersonId) : null;
+  const suggestions = activeSuggestions();
+  $('suggestBtn').hidden = suggestions.size === 0;
+  $('suggestBtn').textContent = suggestions.size > 1 ? `Alle ${suggestions.size} Vorschläge übernehmen` : 'Vorschlag übernehmen';
   list.replaceChildren(...view.services.map((row) => {
+    const sug = suggestions.get(row.request_id);
     const change = state.pending.get(row.request_id);
     let person = row.person;
     if (change) {
@@ -361,10 +366,36 @@ function renderServices(loadingText) {
       },
     },
     el('span', { class: 'label' }, row.label + (row.slot ? ` ${row.slot}` : '')),
-    el('span', { class: 'who' }, personLine(person)),
+    el('span', { class: 'who' }, personLine(person),
+      sug && el('span', { class: 'suggestion', title: sug.reason },
+        ` Vorschlag: ${sug.name} (${sug.reason}) `,
+        el('button', { class: 'small', onclick: () => applySuggestions([row.request_id]) }, 'übernehmen'))),
     el('button', { class: 'secondary small', disabled: !person, onclick: () => unassign(row) }, 'Entfernen'));
     return li;
   }));
+}
+
+// Vorschlaege, die noch passen: Dienst offen und unveraendert, Person nicht schon anderweitig vorgemerkt.
+function activeSuggestions() {
+  const view = state.view;
+  if (!view || view.event_id !== state.eventId || view.group_id !== state.groupId) return new Map();
+  const pendingPersons = new Set([...state.pending.values()].map((c) => c.person_id).filter((id) => id != null));
+  const out = new Map();
+  for (const row of view.services) {
+    const sug = (view.suggestions || {})[String(row.request_id)];
+    if (!sug || row.person || state.pending.has(row.request_id) || pendingPersons.has(sug.person_id)) continue;
+    out.set(row.request_id, sug);
+  }
+  return out;
+}
+
+function applySuggestions(requestIds) {
+  const sugs = activeSuggestions();
+  for (const id of requestIds) {
+    const sug = sugs.get(id);
+    if (sug) state.pending.set(id, { person_id: sug.person_id, name: sug.name, expected: null });
+  }
+  renderServices();
 }
 
 function updateSaveBar() {
@@ -401,6 +432,8 @@ function unassign(row) {
   else state.pending.set(row.request_id, { person_id: null, expected: row.person.id });
   renderServices();
 }
+
+$('suggestBtn').addEventListener('click', () => applySuggestions([...activeSuggestions().keys()]));
 
 $('discardBtn').addEventListener('click', () => {
   state.pending.clear();

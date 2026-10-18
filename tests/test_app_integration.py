@@ -92,3 +92,16 @@ def test_relogin_after_session_expired(client, fake_ct_url):
     assert after == before + 1
     client.post("/api/reload", headers=H)
     assert client.get("/api/groups").status_code == 200
+
+
+def test_view_contains_suggestions(client):
+    v = client.get("/api/view", params={"group_id": 41, "event_id": 1002}).json()
+    ton = next(s for s in v["services"] if s["label"] == "Ton")
+    sug = v["suggestions"].get(str(ton["request_id"]))
+    if ton["person"] is None:
+        assert sug and sug["person_id"] in {p["id"] for p in v["persons"]}
+        chosen = next(p for p in v["persons"] if p["id"] == sug["person_id"])
+        assert not chosen["absent"] and not chosen["rule_blocked"]
+    # Podcast gehoert nicht zur Tontechnik-Gruppe -> kein Vorschlag
+    podcast = next(s for s in v["services"] if s["label"] == "Podcast")
+    assert str(podcast["request_id"]) not in v["suggestions"]

@@ -192,3 +192,29 @@ def test_old_default_config_is_migrated():
     assert "Praktikant Ton" in old["plannable_services"] and old["suggestion_services"] == ["Podcast", "Ton"]
     custom = {"plannable_services": ["Ton", "Licht"]}
     assert app.migrate_config(custom) == [] and custom["plannable_services"] == ["Ton", "Licht"]
+
+
+def test_service_setup_add_and_remove(client, fake_ct_url):
+    import httpx
+    setup = client.get("/api/events/1003/servicesetup").json()["services"]
+    names = [s["name"] for s in setup]
+    assert names[0] == "Licht" and "Praktikant Ton" in names and "Predigt" not in names  # nur Technik-Gruppe
+    ton = next(s for s in setup if s["name"] == "Tontechnik")
+    assert ton["count"] == 1
+    # Podcast hinzufuegen (2 Slots) - nur dieser Dienst wird geschickt
+    res = client.post("/api/events/1003/servicesetup", headers=H,
+                      json={"group_id": 32, "changes": [{"service_id": 10, "count": 2}]}).json()
+    podcast_rows = [s for s in res["view"]["services"] if s["label"] == "Podcast"]
+    assert len(podcast_rows) == 2 and [s["slot"] for s in podcast_rows] == ["1", "2"]
+    writes = httpx.get(f"{fake_ct_url}/test/writes").json()
+    form = [w for w in writes if w[0] == "services"][-1][2]
+    assert form == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": "2", "val0": "checked"}
+    # wieder entfernen: ohne val, leere Anzahl (wie die CT-Weboberflaeche)
+    res = client.post("/api/events/1003/servicesetup", headers=H,
+                      json={"group_id": 32, "changes": [{"service_id": 10, "count": 0}]}).json()
+    assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]
+    form = [w for w in httpx.get(f"{fake_ct_url}/test/writes").json() if w[0] == "services"][-1][2]
+    assert form == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": ""}
+    # Dienste ausserhalb der Technik-Gruppe werden abgelehnt
+    r = client.post("/api/events/1003/servicesetup", headers=H, json={"changes": [{"service_id": 3, "count": 1}]})
+    assert r.status_code == 400

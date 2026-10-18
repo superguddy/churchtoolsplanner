@@ -15,10 +15,16 @@ from fastapi.responses import JSONResponse
 app = FastAPI()
 TODAY = date.today()
 SERVICES = [
-    {"id": 1, "name": "Leitung"}, {"id": 2, "name": "Lobpreis"}, {"id": 3, "name": "Predigt"},
-    {"id": 10, "name": "Podcast"}, {"id": 11, "name": "Tontechnik"}, {"id": 12, "name": "Bild"},
-    {"id": 13, "name": "Praktikant Podcast"}, {"id": 14, "name": "Praktikant Ton"},
-    {"id": 15, "name": "Licht"}, {"id": 16, "name": "Praktikant Licht"},
+    {"id": 1, "name": "Leitung", "serviceGroupId": 1, "sortKey": 1},
+    {"id": 2, "name": "Lobpreis", "serviceGroupId": 1, "sortKey": 2},
+    {"id": 3, "name": "Predigt", "serviceGroupId": 1, "sortKey": 3},
+    {"id": 15, "name": "Licht", "serviceGroupId": 2, "sortKey": 1},
+    {"id": 10, "name": "Podcast", "serviceGroupId": 2, "sortKey": 2},
+    {"id": 12, "name": "Bild", "serviceGroupId": 2, "sortKey": 3},
+    {"id": 11, "name": "Tontechnik", "serviceGroupId": 2, "sortKey": 4},
+    {"id": 16, "name": "Praktikant Licht", "serviceGroupId": 2, "sortKey": 5},
+    {"id": 13, "name": "Praktikant Podcast", "serviceGroupId": 2, "sortKey": 6},
+    {"id": 14, "name": "Praktikant Ton", "serviceGroupId": 2, "sortKey": 7},
 ]
 PEOPLE = {1: "Admin Konto", 2453: "Anna Sonntag", 3001: "Beat Ton", 3002: "Carla Ton",
           3003: "Dario Ton", 3010: "Pia Praktikantin", 3662: "Versteckt Person", 4001: "Eva Podcast", 5001: "Pastor Peter"}
@@ -193,6 +199,34 @@ def decline(eid: int, rid: int):
         if s["id"] == rid:
             s.update(isValid=False, agreed=False)
     return {"data": {}}
+
+
+@app.post("/")
+async def legacy_ajax(request: Request):
+    """Alte Schnittstelle ?q=churchservice/ajax, hier nur func=addOrRemoveServiceToEvent."""
+    if request.query_params.get("q") != "churchservice/ajax":
+        raise HTTPException(404)
+    if request.cookies.get("ChurchTools_ct") not in SESSIONS:
+        return {"status": "fail", "message": "Sitzung abgelaufen"}
+    form = dict(await request.form())
+    if form.get("func") != "addOrRemoveServiceToEvent":
+        return {"status": "error", "message": "unbekannte Funktion"}
+    eid = int(form["id"])
+    WRITES.append(("services", eid, form))
+    entries = EVENTS[eid]["eventServices"]
+    i = 0
+    while f"col{i}" in form:
+        sid = int(form[f"col{i}"])
+        want = int(form.get(f"count{i}") or 0) if form.get(f"val{i}") == "checked" else 0
+        current = [e for e in entries if e["serviceId"] == sid and e.get("isValid", True)]
+        for _ in range(want - len(current)):
+            new_id = max(e["id"] for ev in EVENTS.values() for e in ev["eventServices"]) + 1
+            entries.append(es(new_id, sid, None, counter=len(current) + 1))
+        if want < len(current):
+            for e in sorted(current, key=lambda e: (e["personId"] is not None, -e["counter"]))[:len(current) - want]:
+                e["isValid"] = False
+        i += 1
+    return {"status": "success", "data": None}
 
 
 @app.get("/test/writes")

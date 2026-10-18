@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.5.1"
+APP_VERSION = "2.6.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -212,10 +212,20 @@ def today_local() -> date:
     return datetime.now(SETTINGS.tz).date()
 
 
-def service_names() -> dict[int, str]:
+def services_full() -> list[dict]:
     client = SESSION.require()
-    return SESSION.cached("services", lambda: {s["id"]: s.get("name") or "" for s in client.get_services()},
-                          ttl=3600)
+    return SESSION.cached("services_full", client.get_services, ttl=3600)
+
+
+def service_names() -> dict[int, str]:
+    return {s["id"]: s.get("name") or "" for s in services_full()}
+
+
+def setup_group_ids() -> set[int]:
+    """Dienstgruppen, deren Dienste im Dialog "Dienste bearbeiten" erscheinen: die der planbaren Dienste."""
+    planbar = set(SETTINGS.plannable_services)
+    return {s.get("serviceGroupId") for s in services_full()
+            if SETTINGS.canonical_label(s.get("name")) in planbar and s.get("serviceGroupId") is not None}
 
 
 def groups_by_id() -> dict[int, dict]:
@@ -590,6 +600,38 @@ def save_changes(event_id: int, changes: list[Change], prefix: str = "") -> tupl
             errors.append(f"{prefix}{exc}")
     SESSION.invalidate("event", "history", "events", "month")
     return done, errors
+
+
+class ServiceSetupChange(BaseModel):
+    service_id: int
+    count: int  # 0 = Dienst entfernen
+
+
+class ServiceSetupBody(BaseModel):
+    group_id: int | None = None
+    changes: list[ServiceSetupChange]
+
+
+@app.get("/api/events/{event_id}/servicesetup")
+def api_service_setup(event_id: int) -> dict:
+    SESSION.invalidate("event")
+    event = event_detail(event_id)
+    return {"event_id": event_id, "services": planner.event_service_setup(event, services_full(), setup_group_ids())}
+
+
+@app.post("/api/events/{event_id}/servicesetup")
+def api_service_setup_save(event_id: int, body: ServiceSetupBody) -> dict:
+    """Dienste zum Event hinzufuegen/entfernen (ChurchTools-Dialog "Dienst zum Event hinzufuegen oder entfernen")."""
+    client = SESSION.require()
+    allowed = {s["id"] for s in services_full() if s.get("serviceGroupId") in setup_group_ids()}
+    changes = [(c.service_id, max(0, min(c.count, 20))) for c in body.changes]
+    bad = [sid for sid, _ in changes if sid not in allowed]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Dienst(e) {bad} koennen hier nicht geaendert werden.")
+    client.set_event_services(event_id, changes)
+    SESSION.invalidate("event", "history", "events", "month")
+    return {"view": build_view(body.group_id, event_id),
+            "services": planner.event_service_setup(event_detail(event_id), services_full(), setup_group_ids())}
 
 
 @app.post("/api/events/{event_id}/save")

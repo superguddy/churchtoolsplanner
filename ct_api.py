@@ -144,6 +144,32 @@ class ChurchToolsClient:
         if resp.status_code >= 400:
             raise ChurchToolsError(f"Speichern fehlgeschlagen ({resp.status_code}): {resp.text[:500]}")
 
+    def set_event_services(self, event_id: int, changes: list[tuple[int, int]]) -> None:
+        """Dienste eines Events hinzufuegen/entfernen bzw. Anzahl setzen: [(serviceId, anzahl)], 0 = entfernen.
+
+        Es gibt dafuer keine REST-Route; die ChurchTools-Weboberflaeche (Dialog "Dienst zum Event hinzufuegen
+        oder entfernen") nutzt die alte Schnittstelle churchservice/ajax, func addOrRemoveServiceToEvent
+        (Aufzeichnung vom 18.10.2026). Wir schicken bewusst NUR die geaenderten Dienste mit, so wie die
+        Weboberflaeche Dienste anderer Dienstgruppen auch nicht mitschickt.
+        """
+        if not changes:
+            return
+        data: dict[str, str] = {"func": "addOrRemoveServiceToEvent", "id": str(event_id)}
+        for i, (service_id, count) in enumerate(changes):
+            data[f"col{i}"] = str(service_id)
+            data[f"count{i}"] = str(count) if count > 0 else ""
+            if count > 0:
+                data[f"val{i}"] = "checked"
+        resp = self._request("POST", "/", params={"q": "churchservice/ajax"}, data=data, headers=self._write_headers())
+        if resp.status_code >= 400:
+            raise ChurchToolsError(f"Dienste aendern fehlgeschlagen ({resp.status_code}): {resp.text[:500]}")
+        try:
+            body = resp.json()
+        except ValueError:
+            raise ChurchToolsError(f"Dienste aendern: unerwartete Antwort von ChurchTools: {resp.text[:300]}") from None
+        if isinstance(body, dict) and body.get("status") not in (None, "success"):
+            raise ChurchToolsError(f"Dienste aendern fehlgeschlagen: {body.get('message') or body.get('data') or body}")
+
     def decline_service_request(self, event_id: int, request_id: int) -> None:
         resp = self._request("POST", f"/api/events/{event_id}/servicerequests/{request_id}/decline",
                              json={}, headers=self._write_headers())

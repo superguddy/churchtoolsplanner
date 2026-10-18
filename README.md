@@ -70,6 +70,16 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
   aus den übrigen. Welche Dienste Praktikanten-Dienste sind: `intern_services` in config.json
   (Standard „Praktikant Ton“, „Praktikant Podcast“, „Praktikant Bild“ – wie in ChurchTools).
 
+## Seit 2.6.0
+- **Dienste bearbeiten**: In der Planung (Knopf neben dem Event-Titel) und in der Monatsübersicht
+  („Dienste bearbeiten …“ unter jedem Event) lassen sich Dienste zum Event hinzufügen, entfernen oder die
+  Anzahl ändern – wie im ChurchTools-Dialog „Dienst zum Event hinzufügen oder entfernen“. Angezeigt werden
+  die Dienste der Dienstgruppe(n) der planbaren Dienste (Licht, Podcast, Bild, Ton, Praktikant …).
+  Änderungen gehen sofort nach ChurchTools; nur geänderte Dienste werden geschickt. Beim Entfernen/Verkleinern
+  eines Dienstes mit eingeteilter Person kommt eine Warnung.
+  Technisch nutzt das – wie die ChurchTools-Oberfläche selbst – die alte Schnittstelle
+  `churchservice/ajax` (`addOrRemoveServiceToEvent`); eine REST-Route dafür gibt es nicht.
+
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen
 `tests/fake_ct.py`, einen simulierten ChurchTools-Server (Login test/test). Die Browser-Tests

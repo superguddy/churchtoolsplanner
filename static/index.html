@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChurchTools Planer</title>
-  <link rel="stylesheet" href="/static/style.css?v=2.5.1">
+  <link rel="stylesheet" href="/static/style.css?v=2.6.0">
 </head>
 <body>
   <header class="topbar">
@@ -57,7 +57,8 @@
     </section>
 
     <section class="col col-services">
-      <h2 id="eventTitle">Dienste</h2>
+      <div class="eventhead"><h2 id="eventTitle">Dienste</h2>
+        <button id="setupBtn" class="secondary small" hidden title="Dienste zum Event hinzufügen oder entfernen (wie in ChurchTools)">Dienste bearbeiten</button></div>
       <h3>Info (Leitung / Lobpreisleitung / Predigt)</h3>
       <ul id="infoList" class="list info"></ul>
       <h3 class="servicesHead">Planbare Dienste <button id="suggestBtn" class="small" hidden title="Für offene Dienste die passendste verfügbare Person vormerken (noch nicht gespeichert)">Vorschläge übernehmen</button></h3>
@@ -76,6 +77,7 @@
     <li data-action="rules"><span class="tick"></span>Regeln bearbeiten …</li>
   </ul>
 
-  <script src="/static/app.js?v=2.5.1"></script>
+  <script src="/static/services_dialog.js?v=2.6.0"></script>
+  <script src="/static/app.js?v=2.6.0"></script>
 </body>
 </html>

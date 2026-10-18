@@ -319,6 +319,7 @@ function renderServices(loadingText) {
   const view = state.view;
   const current = view && view.event_id === state.eventId ? view.event : null;
   $('eventTitle').textContent = current ? current.display : 'Dienste';
+  $('setupBtn').hidden = !current;
   updateSaveBar();
   $('suggestBtn').hidden = true;
 
@@ -441,6 +442,23 @@ function unassign(row) {
   else state.pending.set(row.request_id, { person_id: null, expected: row.person.id });
   renderServices();
 }
+
+$('setupBtn').addEventListener('click', () => {
+  const eventId = state.eventId;
+  if (!eventId || state.saving) return;
+  if (state.pending.size && !confirm('Es gibt nicht gespeicherte Einteilungen. Diese gehen dabei verloren. Weiter?')) return;
+  window.openServiceSetup({
+    api, eventId, groupId: state.groupId, title: $('eventTitle').textContent,
+    onSaved: (res) => {
+      state.pending.clear();
+      if (state.eventId === eventId && res.view.group_id === state.groupId) {
+        state.viewSeq++;
+        applyView(res.view);
+      }
+      setStatus('Dienste in ChurchTools geändert.');
+    },
+  });
+});
 
 $('suggestBtn').addEventListener('click', () => applySuggestions([...activeSuggestions().keys()]));
 

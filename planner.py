@@ -405,3 +405,26 @@ def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[d
                 reason += ", Monatslimit erreicht"
             out[(ev["id"], row["request_id"])] = {"person_id": p["id"], "name": p["name"], "reason": reason}
     return out
+
+
+def event_service_setup(event: dict, services: list[dict], group_ids: set[int]) -> list[dict]:
+    """Dienste der Dienstgruppen `group_ids` mit aktueller Anzahl im Event und eingeteilten Personen.
+
+    Grundlage fuer den Dialog "Dienste bearbeiten" (wie in ChurchTools "Dienst zum Event hinzufuegen").
+    """
+    rows: dict[int, dict] = {}
+    for s in services:
+        if s.get("serviceGroupId") in group_ids:
+            rows[s["id"]] = {"service_id": s["id"], "name": s.get("name") or "", "group_id": s.get("serviceGroupId"),
+                             "sort": s.get("sortKey") or 0, "count": 0, "assigned": []}
+    for es in event.get("eventServices") or []:
+        if not isinstance(es, dict) or not service_entry_is_current(es):
+            continue
+        row = rows.get(es.get("serviceId"))
+        if row is None:
+            continue
+        row["count"] += 1
+        pid, name = service_entry_person(es)
+        if pid or name:
+            row["assigned"].append(name or f"Person {pid}")
+    return sorted(rows.values(), key=lambda r: (r["group_id"] or 0, r["sort"], r["name"].lower()))

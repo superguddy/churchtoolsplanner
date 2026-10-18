@@ -240,7 +240,11 @@ function renderTable() {
   }
   const counts = monthCounts();
   $('monthBody').replaceChildren(...view.events.map((ev) => el('tr', { class: ev.past ? 'past' : '' },
-    el('td', { class: 'evname' }, ev.display, ev.past ? el('div', { class: 'muted small' }, 'vergangen') : null),
+    el('td', { class: 'evname' }, ev.display, ev.past ? el('div', { class: 'muted small' }, 'vergangen')
+      : el('div', {}, el('button', {
+        class: 'linklike small', title: 'Dienste zum Event hinzufügen oder entfernen (wie in ChurchTools)',
+        onclick: () => editServices(ev),
+      }, 'Dienste bearbeiten …'))),
     ...view.labels.map((label) => {
       const rows = ev.rows.filter((r) => r.label === label);
       if (!rows.length) return el('td', { class: 'muted small' }, 'kein Dienst');
@@ -312,6 +316,14 @@ function renderSummary() {
         p.rule.max_per_month ? `${c}/${p.rule.max_per_month}${p.rule.limit_hard ? ' !' : ''}` : c),
       el('td', {}, fmtDate(p.last_before)));
   }));
+}
+
+function editServices(ev) {
+  if (state.pending.size && !confirm('Es gibt nicht gespeicherte Einteilungen. Diese gehen dabei verloren. Weiter?')) return;
+  window.openServiceSetup({
+    api, eventId: ev.id, groupId: state.groupId, title: ev.display,
+    onSaved: () => { state.pending.clear(); setStatus('Dienste in ChurchTools geändert.'); load(); },
+  });
 }
 
 // ------------------------------------------------------------------ Aktionen

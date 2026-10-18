@@ -182,3 +182,19 @@ def test_intern_flag_blocks_normal_service(page, planner_url):
     assert msgs and "Praktikanten-Dienste" in msgs[0]
     prak = page.locator("#servicesList li", has_text="Praktikant Ton")
     assert "Vorschlag: Pia Praktikantin" in prak.inner_text()
+
+
+def test_service_setup_dialog(page, planner_url):
+    page.goto(planner_url)
+    page.wait_for_selector("#mainView:not([hidden])")
+    page.click("#groupsList li:has-text('Bild-Technik')")
+    page.click("#eventsList li:has-text('Bibelabend')")
+    title_contains(page, "Bibelabend")
+    assert "Bild" not in page.inner_text("#servicesList")
+    page.click("#setupBtn")
+    page.wait_for_selector("dialog.svcdialog tbody tr")
+    page.locator("dialog.svcdialog tr", has_text="Bild").first.locator("input[type=checkbox]").check()
+    page.click("dialog.svcdialog button:has-text('Speichern')")
+    page.wait_for_selector("dialog.svcdialog", state="detached")
+    page.wait_for_function("document.getElementById('servicesList').innerText.includes('Bild')")
+    assert "Dienste in ChurchTools geändert" in page.inner_text("#saveStatus")

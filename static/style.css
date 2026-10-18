@@ -208,3 +208,13 @@ table.month tr.past td { color: var(--muted); background: #fafbfc; }
 
 .badge.intern { background: #e7f0ff; color: var(--accent); }
 .internflag { display: flex; gap: 4px; align-items: center; margin: 4px 0 0; color: var(--text); }
+
+/* Dialog "Dienste bearbeiten" */
+.eventhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.svcdialog { border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; width: min(560px, calc(100vw - 32px)); }
+.svcdialog::backdrop { background: rgba(0, 0, 0, .35); }
+.svcdialog h2 { margin-bottom: 2px; }
+.svcdialog table td, .svcdialog table th { text-align: left; padding: 5px 6px; }
+.svcdialog tr.changed { background: var(--pending); }
+.svcdialog input.num { width: 70px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.svcdialog label.check { display: flex; gap: 6px; align-items: center; margin: 0; }

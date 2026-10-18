@@ -21,7 +21,7 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, gesperrte Tage/Zeiträume, Monatslimit
   (weich oder `limitHard`), Notiz, `intern` (Praktikant/in). `block_reason(day)` liefert den Sperrgrund.
 - `login_store.py` – gemerkter Login, Passwort per Windows-DPAPI (ctypes), übernimmt alten C#-Login.
-- `static/` – `index.html`/`app.js` (Planung), `month.html`/`month.js` (Monat), `rules.html`/`rules.js` (Regeln), `style.css`.
+- `static/` – `services_dialog.js` (Dialog „Dienste bearbeiten“, von Planung und Monat genutzt), `index.html`/`app.js` (Planung), `month.html`/`month.js` (Monat), `rules.html`/`rules.js` (Regeln), `style.css`.
 - `config_defaults/` – Startwerte für `rules.json`/`hidden_persons.json` (nur beim ersten Start kopiert).
 - `tests/` – pytest; `fake_ct.py` = simulierter ChurchTools-Server (Login test/test).
 
@@ -88,16 +88,20 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 ## Offene Punkte / zu prüfen am echten ChurchTools
 - ~~„Entfernen“ = `POST .../servicerequests/{rid}/decline`~~ – vom Nutzer am echten ChurchTools bestätigt
   (wird als Absage übernommen, 18.10.2026).
-- **Dienste zu einem Event hinzufügen/entfernen** (Nutzerwunsch 18.10.2026, NICHT umgesetzt): keine
-  dokumentierte REST-Route gefunden. Im alten `churchservice/ajax` gibt es `addOrRemoveServiceToEvent`,
-  aber ChurchTools schaltet `churchservice/ajax`-Funktionen schrittweise ab (Termine 30.09./30.10.2026 laut
-  Academy „Discontinued and deleted APIs“) – nicht darauf bauen. Nächster Schritt: Nutzer liefert die
-  Anfrage, die die CT-Weboberfläche beim Speichern dieses Dialogs schickt (F12 → Netzwerk), oder die Route
-  aus `https://feg-sulgen.church.tools/api`.
+- **Dienste zu einem Event hinzufügen/entfernen** (V2.6.0): keine REST-Route vorhanden. Die
+  CT-Weboberfläche selbst schickt (Aufzeichnung Nutzer 18.10.2026, F12 → Netzwerk) `POST /?q=churchservice/ajax`
+  als Formular: `func=addOrRemoveServiceToEvent`, `id=<eventId>`, je Dienst `colN=<serviceId>`,
+  `valN=checked` (nur wenn aktiv) und `countN=<Anzahl>` (leer wenn nicht aktiv); sie schickt alle Dienste
+  EINER Dienstgruppe. Wir schicken nur die geänderten Dienste (`ChurchToolsClient.set_event_services`),
+  damit nichts versehentlich entfernt wird. RISIKO: ChurchTools schaltet `churchservice/ajax` schrittweise
+  ab (Academy „Discontinued and deleted APIs“). Fällt die Funktion weg, Fehlermeldung beachten und die neue
+  Anfrage der CT-Oberfläche erneut aufzeichnen lassen. Am echten CT noch nicht über den Planer getestet.
 - CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.6.0: „Dienste bearbeiten“ (Dienste zum Event hinzufügen/entfernen/Anzahl) in Planung und Monat.
+  44 Tests grün (inkl. 8 Browser-Tests).
 - V2.5.1: Dienstnamen an ChurchTools angepasst (Praktikant Ton/Podcast/Bild), alte Namen als Aliase,
   automatische Umstellung alter config.json-Standardwerte. 42 Tests grün.
 - V2.5.0: Regel „Praktikant/in“ (nur Praktikanten-Dienste) inkl. Vorschlägen für Praktikanten-Dienste.

@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -49,6 +49,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     # Fuer diese Dienste macht "Vorschlag" automatisch Vorschlaege (Praktikanten-Dienste bewusst nicht)
     "suggestion_services": ["Podcast", "Ton", "Bild"],
+    # Praktikanten-Dienste: nur Personen mit Regel "Praktikant/in"; bekommen ebenfalls Vorschlaege
+    "intern_services": ["Praktikant I Tontechnik", "Praktikant II Podcast"],
     "past_event_days": 28,
     "future_event_days": 84,
     "history_days": 365,
@@ -167,6 +169,15 @@ class Session:
 
 
 SESSION = Session()
+
+
+def intern_labels() -> set[str]:
+    return set(CONFIG["intern_services"])
+
+
+def suggestion_labels(relevant: set[str]) -> set[str]:
+    """Dienste mit Vorschlaegen: suggestion_services plus Praktikanten-Dienste (nur mit Praktikanten besetzt)."""
+    return relevant & (set(CONFIG["suggestion_services"]) | intern_labels())
 
 
 def today_local() -> date:
@@ -414,14 +425,15 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
                 "month_count": count,
                 "limit_reached": bool(day and rule.max_per_month and count >= rule.max_per_month),
                 "in_event": in_event.get(p["id"], []),
+                "intern": rule.intern,
                 "last_date": last[p["id"]].isoformat() if p["id"] in last else None,
             })
         view["persons"] = planner.sort_persons(rows)
         view["relevant_services"] = sorted(relevant)
         if event:
-            labels = relevant & set(CONFIG["suggestion_services"])
-            view["suggestions"] = {str(k): v for k, v in
-                                   planner.suggest_assignments(view["services"], view["persons"], labels).items()}
+            view["suggestions"] = {str(k): v for k, v in planner.suggest_assignments(
+                view["services"], view["persons"], suggestion_labels(relevant), intern_labels()).items()}
+        view["intern_services"] = sorted(intern_labels())
     return view
 
 
@@ -475,6 +487,7 @@ class RuleBody(BaseModel):
     limit_hard: bool = False
     blocked_dates: list[BlockedDatesBody] = []
     note: str = ""
+    intern: bool = False
 
 
 @app.put("/api/rules/{person_id}")
@@ -487,6 +500,7 @@ def api_rule(person_id: int, body: RuleBody) -> dict:
         body.note.strip()[:500],
         body.limit_hard,
         rules_mod.parse_blocked_dates([{"from": b.from_, "to": b.to, "note": b.note} for b in body.blocked_dates]),
+        body.intern,
     )
     rules[person_id] = rule
     rules_mod.save_rules(RULES_PATH, rules)
@@ -631,9 +645,10 @@ def build_month(group_id: int, month: str, overrides: dict[tuple[int, int], int 
     last_dates = planner.last_assignment_dates(
         [(d, p) for d, p in history if d < first], {p["id"] for p in persons})
     suggestions = planner.suggest_month(sim_events, persons, history, rules,
-                                        relevant & set(CONFIG["suggestion_services"]))
+                                        suggestion_labels(relevant), intern_labels())
     return {
         "group_id": group_id, "month": month, "labels": labels, "events": events_out,
+        "intern_services": sorted(intern_labels()),
         "persons": [{**p, "rule": (rules.get(p["id"]) or rules_mod.PersonRule(p["id"])).to_api(),
                      "last_before": last_dates[p["id"]].isoformat() if p["id"] in last_dates else None}
                     for p in sorted(persons, key=lambda x: x["name"].lower())],

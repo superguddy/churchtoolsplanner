@@ -161,3 +161,23 @@ def test_blocked_date_and_hard_limit_in_view(client):
         beat = next(p for p in v["persons"] if p["id"] == 3001)
         assert beat["rule_blocked"] and f"max. {count}×/Monat erreicht" in beat["rule_reason"]
     client.put("/api/rules/3001", headers=H, json={})
+
+
+def test_intern_rule_in_view_and_month(client):
+    client.put("/api/rules/3010", headers=H, json={"intern": True, "max_per_month": 1, "limit_hard": True})
+    v = client.get("/api/view", params={"group_id": 41, "event_id": 1002}).json()
+    assert v["intern_services"] == ["Praktikant I Tontechnik", "Praktikant II Podcast"]
+    pia = next(p for p in v["persons"] if p["id"] == 3010)
+    assert pia["intern"]
+    rows = {s["label"]: s for s in v["services"]}
+    praktikant = v["suggestions"].get(str(rows["Praktikant I Tontechnik"]["request_id"]))
+    assert praktikant and praktikant["person_id"] == 3010
+    ton = v["suggestions"].get(str(rows["Ton"]["request_id"]))
+    assert not ton or ton["person_id"] != 3010
+    ev = next(e for e in client.get("/api/events").json() if e["id"] == 1002)
+    m = client.get("/api/month", params={"group_id": 41, "month": ev["start"][:7]}).json()
+    assert "Praktikant I Tontechnik" in m["labels"]
+    sug = {(s["event_id"], s["request_id"]): s["person_id"] for s in m["suggestions"]}
+    assert sug.get((1002, rows["Praktikant I Tontechnik"]["request_id"])) == 3010
+    assert all(pid != 3010 or rid == rows["Praktikant I Tontechnik"]["request_id"] for (_, rid), pid in sug.items())
+    client.put("/api/rules/3010", headers=H, json={})

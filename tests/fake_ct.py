@@ -17,13 +17,13 @@ TODAY = date.today()
 SERVICES = [
     {"id": 1, "name": "Leitung"}, {"id": 2, "name": "Lobpreis"}, {"id": 3, "name": "Predigt"},
     {"id": 10, "name": "Podcast"}, {"id": 11, "name": "Tontechnik"}, {"id": 12, "name": "Bild"},
-    {"id": 13, "name": "Praktikant II Podcast"},
+    {"id": 13, "name": "Praktikant II Podcast"}, {"id": 14, "name": "Praktikant I Tontechnik"},
 ]
 PEOPLE = {1: "Admin Konto", 2453: "Anna Sonntag", 3001: "Beat Ton", 3002: "Carla Ton",
-          3003: "Dario Ton", 3662: "Versteckt Person", 4001: "Eva Podcast", 5001: "Pastor Peter"}
+          3003: "Dario Ton", 3010: "Pia Praktikantin", 3662: "Versteckt Person", 4001: "Eva Podcast", 5001: "Pastor Peter"}
 GROUPS = [{"id": 41, "name": "Tontechnik"}, {"id": 32, "name": "Podcast"},
           {"id": 38, "name": "Bild-Technik"}, {"id": 99, "name": "Hauskreis"}]
-MEMBERS = {41: [1, 2453, 3001, 3002, 3003, 3662], 32: [1, 4001, 3662], 38: [1, 3002]}
+MEMBERS = {41: [1, 2453, 3001, 3002, 3003, 3662, 3010], 32: [1, 4001, 3662], 38: [1, 3002]}
 EVENT_DELAYS: dict[int, float] = {1001: 2.5}
 WRITES: list[tuple] = []
 
@@ -60,7 +60,7 @@ def make_events() -> dict[int, dict]:
     add(1002, sunday_offset(2), "Gottesdienst B", [
         es(20, 1, 5001), es(21, 3, 5001),
         es(22, 11, 3003, agreed=False, valid=False, counter=1),
-        es(23, 11, None, counter=1), es(24, 10, None), es(25, 13, None)])
+        es(23, 11, None, counter=1), es(24, 10, None), es(25, 13, None), es(26, 14, None)])
     # C: Mittwoch -> Regel "nur Sonntag" greift
     add(1003, sunday_offset(1) + timedelta(days=3), "Bibelabend", [es(30, 11, None)], hour=17)
     # Historie

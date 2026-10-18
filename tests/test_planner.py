@@ -150,3 +150,26 @@ def test_suggest_month_respects_hard_limit_and_blocked_dates():
                          blocked_dates=rules.parse_blocked_dates([{"from": "2026-11-01"}], today=date(2026, 10, 1)))
     sug = planner.suggest_month(events, persons, [], {1: r}, {"Ton"})
     assert list(sug) == [(2, 21)]   # 01.11. gesperrt, 08.11. eingeplant, danach Limit 1/Monat erreicht
+
+
+def test_intern_only_for_intern_services():
+    services = [{"request_id": 1, "label": "Ton", "person": None},
+                {"request_id": 2, "label": "Praktikant I Tontechnik", "person": None}]
+    persons = [_p(1, "Pia", intern=True), _p(2, "Beat", "2026-10-01")]
+    labels = {"Ton", "Praktikant I Tontechnik"}
+    sug = planner.suggest_assignments(services, persons, labels, {"Praktikant I Tontechnik"})
+    assert sug[1]["name"] == "Beat" and sug[2]["name"] == "Pia"   # Pia (nie dran) trotzdem nicht fuer Ton
+    # ohne Praktikanten bleibt der Praktikanten-Dienst ohne Vorschlag
+    sug = planner.suggest_assignments(services, [_p(2, "Beat")], labels, {"Praktikant I Tontechnik"})
+    assert list(sug) == [1]
+
+
+def test_suggest_month_intern():
+    import rules
+    ev = {"id": 1, "date": date(2026, 11, 1), "absent": set(), "in_event": {},
+          "rows": [{"request_id": 1, "label": "Ton", "person": None},
+                   {"request_id": 2, "label": "Praktikant I Tontechnik", "person": None}]}
+    persons = [{"id": 1, "name": "Pia"}, {"id": 2, "name": "Beat"}]
+    sug = planner.suggest_month([ev], persons, [], {1: rules.PersonRule(1, intern=True)},
+                                {"Ton", "Praktikant I Tontechnik"}, {"Praktikant I Tontechnik"})
+    assert sug[(1, 1)]["name"] == "Beat" and sug[(1, 2)]["name"] == "Pia"

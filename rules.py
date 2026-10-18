@@ -4,6 +4,7 @@ Format (neu):
   {"persons": [{"personId": 2453, "blockedWeekdays": [0,1,2,3,4,5], "maxPerMonth": 1, "limitHard": true,
                 "blockedDates": [{"from": "2026-11-12", "to": "2026-11-14", "note": "Pruefung"}], "note": "..."}]}
 Wochentage: 0 = Montag ... 6 = Sonntag. limitHard: Monatslimit sperrt (sonst nur Rueckfrage).
+intern: Praktikant/in, nur fuer Praktikanten-Dienste (config intern_services).
 Alte Eintraege {"personId": .., "onlySunday": true} werden beim Lesen als Mo–Sa gesperrt uebernommen.
 """
 from __future__ import annotations
@@ -46,10 +47,11 @@ class PersonRule:
     note: str = ""
     limit_hard: bool = False
     blocked_dates: list[BlockedDates] = field(default_factory=list)
+    intern: bool = False  # Praktikant/in: nur fuer Praktikanten-Dienste einplanen
 
     def is_empty(self) -> bool:
         return (not self.blocked_weekdays and not self.max_per_month and not self.note.strip()
-                and not self.blocked_dates)
+                and not self.blocked_dates and not self.intern)
 
     def summary(self) -> str:
         """Kurztext fuer Badges, z. B. "nur So", "nie Mi" oder "nie Mo, Mi"."""
@@ -93,13 +95,19 @@ class PersonRule:
                 out["limitHard"] = True
         if self.blocked_dates:
             out["blockedDates"] = [b.to_json() for b in sorted(self.blocked_dates, key=lambda b: b.start)]
+        if self.intern:
+            out["intern"] = True
         if self.note.strip():
             out["note"] = self.note.strip()
         return out
 
+    def fits_service(self, label: str | None, intern_labels: set[str]) -> bool:
+        """Praktikanten nur fuer Praktikanten-Dienste, alle anderen nur fuer die uebrigen (fuer Vorschlaege)."""
+        return self.intern == (label in intern_labels)
+
     def to_api(self) -> dict:
         return {"blocked_weekdays": sorted(self.blocked_weekdays), "max_per_month": self.max_per_month,
-                "limit_hard": bool(self.max_per_month and self.limit_hard), "note": self.note,
+                "limit_hard": bool(self.max_per_month and self.limit_hard), "note": self.note, "intern": self.intern,
                 "blocked_dates": [{**b.to_json(), "label": b.label()}
                                   for b in sorted(self.blocked_dates, key=lambda b: b.start)],
                 "summary": self.summary()}
@@ -139,7 +147,7 @@ def _parse(raw: dict) -> PersonRule | None:
     max_pm = r.get("maxpermonth")
     max_pm = int(max_pm) if isinstance(max_pm, (int, float)) and max_pm > 0 else None
     return PersonRule(pid, blocked, max_pm, str(r.get("note") or ""), bool(r.get("limithard")),
-                      parse_blocked_dates(r.get("blockeddates")))
+                      parse_blocked_dates(r.get("blockeddates")), bool(r.get("intern")))
 
 
 def load_rules(path: Path) -> dict[int, PersonRule]:

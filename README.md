@@ -63,6 +63,13 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
   im Monat gesperrt (z. B. Praktikant max. 1×/Monat) und wird nicht mehr vorgeschlagen; ohne Häkchen wie
   bisher nur eine Rückfrage.
 
+## Seit 2.5.0
+- Regel **„Praktikant/in“** (Häkchen beim Namen auf der Seite Regeln): nur in Praktikanten-Dienste einteilbar
+  (für andere Dienste gesperrt wie eine Abwesenheit); Nicht-Praktikanten in Praktikanten-Diensten nur mit
+  Rückfrage. Praktikanten-Dienste bekommen jetzt Vorschläge – nur aus den Praktikanten; normale Dienste nur
+  aus den übrigen. Welche Dienste Praktikanten-Dienste sind: `intern_services` in config.json
+  (Standard „Praktikant I Tontechnik“, „Praktikant II Podcast“).
+
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen
 `tests/fake_ct.py`, einen simulierten ChurchTools-Server (Login test/test). Die Browser-Tests

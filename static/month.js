@@ -177,6 +177,13 @@ function setPerson(ev, row, personId, { ask = true } = {}) {
   const orig = row.person ? row.person.id : null;
   if (personId && ask) {
     const person = state.view.persons.find((p) => p.id === personId);
+    const isInternService = (state.view.intern_services || []).includes(row.label);
+    if (person.rule.intern && !isInternService) {
+      alert(`${person.name} ist als Praktikant/in markiert und kann nur in Praktikanten-Dienste eingeteilt werden.`);
+      return false;
+    }
+    if (!person.rule.intern && isInternService
+        && !confirm(`${person.name} ist nicht als Praktikant/in markiert. Trotzdem in „${row.label}“ einteilen?`)) return false;
     const others = othersInEvent(ev, row).get(personId);
     if (others && !confirm(`${person.name} ist in diesem Event schon eingeteilt (${others.join(', ')}). Trotzdem?`)) return false;
     const max = person.rule.max_per_month;
@@ -252,9 +259,12 @@ function cell(ev, row, slot, counts) {
   if (row.person && !persons.some((p) => p.id === row.person.id)) {
     persons.push({ id: row.person.id, name: row.person.name, rule: {}, foreign: true });
   }
+  const isInternService = (state.view.intern_services || []).includes(row.label);
   for (const p of persons) {
     const marks = [];
     let disabled = false;
+    if (p.rule.intern && !isInternService) { marks.push('nur Praktikanten-Dienste'); disabled = true; }
+    if (p.rule.intern && isInternService) marks.push('Praktikant');
     if (absent.has(p.id)) { marks.push('abwesend'); disabled = true; }
     if (ev.blocked[String(p.id)]) { marks.push(`Regel: ${ev.blocked[String(p.id)]}`); disabled = true; }
     if (others.has(p.id)) marks.push(`schon: ${others.get(p.id).join(', ')}`);

@@ -321,10 +321,12 @@ def counts_in_month(history: list[tuple[date, int]], year: int, month: int) -> d
     return counts
 
 
-def suggest_assignments(services: list[dict], persons: list[dict], labels: set[str]) -> dict[int, dict]:
+def suggest_assignments(services: list[dict], persons: list[dict], labels: set[str],
+                        intern_labels: frozenset[str] | set[str] = frozenset()) -> dict[int, dict]:
     """Vorschlag je offenem Dienst (request_id -> Person).
 
     Nur Dienste aus `labels`; nie abwesende, regelgesperrte oder im Event schon eingeteilte Personen.
+    Praktikanten-Dienste (`intern_labels`) nur mit Praktikanten (p["intern"]), alle anderen nur ohne.
     Reihenfolge: Monatslimit noch nicht erreicht, am laengsten nicht dran, wenig Einsaetze im Monat, Name.
     Jede Person hoechstens einmal pro Event.
     """
@@ -337,9 +339,11 @@ def suggest_assignments(services: list[dict], persons: list[dict], labels: set[s
     for row in services:
         if row.get("person") or not row.get("request_id") or row.get("label") not in labels:
             continue
-        pick = next((p for p in candidates if p["id"] not in used), None)
+        is_intern_service = row.get("label") in intern_labels
+        pick = next((p for p in candidates
+                     if p["id"] not in used and bool(p.get("intern")) == is_intern_service), None)
         if not pick:
-            break
+            continue
         used.add(pick["id"])
         if pick["last_date"]:
             y, m, d = pick["last_date"].split("-")
@@ -353,7 +357,8 @@ def suggest_assignments(services: list[dict], persons: list[dict], labels: set[s
 
 
 def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[date, int]],
-                  rules_by_pid: dict, labels: set[str]) -> dict[tuple[int, int], dict]:
+                  rules_by_pid: dict, labels: set[str],
+                  intern_labels: frozenset[str] | set[str] = frozenset()) -> dict[tuple[int, int], dict]:
     """Vorschlaege fuer alle offenen Dienste mehrerer Events (Monatsuebersicht).
 
     events: [{"id", "date": date, "rows": [Dienst-Zeilen], "absent": set[int], "in_event": {pid: [labels]},
@@ -379,6 +384,8 @@ def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[d
                 rule = rules_by_pid.get(pid)
                 if pid in used or pid in ev["absent"] or (rule and rule.blocks(day)):
                     continue
+                if bool(rule and rule.intern) != (row["label"] in intern_labels):
+                    continue  # Praktikanten nur Praktikanten-Dienste, andere nur die uebrigen
                 dists = [abs((d - day).days) for d, q in assigned if q == pid]
                 dist = min(dists) if dists else None
                 count = sum(1 for d, q in assigned if q == pid and d.year == day.year and d.month == day.month)

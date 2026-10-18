@@ -163,3 +163,22 @@ def test_month_page_apply_suggestions_and_save(page, planner_url):
     assert any(v for v in selected)
     page.goto(planner_url)
     page.wait_for_selector("#mainView:not([hidden])")
+
+
+def test_intern_flag_blocks_normal_service(page, planner_url):
+    page.goto(planner_url + "regeln")
+    page.wait_for_selector("tr#p3010")
+    page.locator("tr#p3010 .internflag input").check()
+    page.wait_for_function("document.getElementById('saveState').textContent.includes('Gespeichert')")
+    page.goto(planner_url)
+    page.wait_for_selector("#mainView:not([hidden])")
+    page.click("#groupsList li:has-text('Tontechnik')")
+    page.click("#eventsList li:has-text('Gottesdienst B')")
+    title_contains(page, "Gottesdienst B")
+    page.wait_for_selector("#personsList li:has-text('Pia Praktikantin') .badge.intern")
+    msgs = []
+    page.once("dialog", lambda d: (msgs.append(d.message), d.accept()))
+    page.drag_and_drop("#personsList li:has-text('Pia Praktikantin')", "#servicesList li:has-text('Ton') >> nth=0")
+    assert msgs and "Praktikanten-Dienste" in msgs[0]
+    prak = page.locator("#servicesList li", has_text="Praktikant I Tontechnik")
+    assert "Vorschlag: Pia Praktikantin" in prak.inner_text()

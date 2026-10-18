@@ -67,7 +67,7 @@ async function saveHidden(person, groupId, hidden) {
 
 function hasRule(p) {
   return p.rule.blocked_weekdays.length || p.rule.max_per_month || p.rule.note || p.hidden_in.length
-    || p.rule.blocked_dates.length;
+    || p.rule.blocked_dates.length || p.rule.intern;
 }
 
 function render() {
@@ -123,7 +123,10 @@ function render() {
       ` ${groupName.get(gid) || gid}`)));
 
     return el('tr', { id: `p${p.id}`, class: hasRule(p) ? 'hasrule' : '' },
-      el('td', {}, p.name, el('div', { class: 'muted small' }, `ID ${p.id}`)),
+      el('td', {}, p.name, el('div', { class: 'muted small' }, `ID ${p.id}`),
+        el('label', { class: 'check small internflag', title: 'Nur in Praktikanten-Dienste einteilen; bekommt dort Vorschläge' },
+          el('input', { type: 'checkbox', checked: !!p.rule.intern, onchange: (e) => { p.rule.intern = e.target.checked; saveRule(p); } }),
+          ' Praktikant/in')),
       el('td', {}, days), el('td', {}, dates), el('td', {}, max), el('td', {}, note), el('td', {}, hidden));
   }));
 }

@@ -205,3 +205,6 @@ table.month tr.past td { color: var(--muted); background: #fafbfc; }
 .card .dateadder input { display: inline-block; margin-top: 0; width: auto; font: inherit; font-size: 12px;
   padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; }
 .card .dateadder input.datenote { width: 90px; }
+
+.badge.intern { background: #e7f0ff; color: var(--accent); }
+.internflag { display: flex; gap: 4px; align-items: center; margin: 4px 0 0; color: var(--text); }

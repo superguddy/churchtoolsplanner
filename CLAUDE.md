@@ -19,7 +19,7 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   automatische Neuanmeldung bei 401).
 - `planner.py` – reine Planungslogik ohne Netzwerk (Dienst-Zuordnung, Abwesenheiten, Statistik, Sortierung).
 - `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, gesperrte Tage/Zeiträume, Monatslimit
-  (weich oder `limitHard`), Notiz. `block_reason(day)` liefert den Sperrgrund.
+  (weich oder `limitHard`), Notiz, `intern` (Praktikant/in). `block_reason(day)` liefert den Sperrgrund.
 - `login_store.py` – gemerkter Login, Passwort per Windows-DPAPI (ctypes), übernimmt alten C#-Login.
 - `static/` – `index.html`/`app.js` (Planung), `month.html`/`month.js` (Monat), `rules.html`/`rules.js` (Regeln), `style.css`.
 - `config_defaults/` – Startwerte für `rules.json`/`hidden_persons.json` (nur beim ersten Start kopiert).
@@ -46,6 +46,11 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   Monatslimit und „schon im Event eingeteilt“ sind nur Rückfragen. Verbindliches Limit zählt nur Einsätze
   in ANDEREN Events des Monats (`limit_blocks(count - here)`), damit eine bestehende Einteilung im
   gewählten Event nicht sich selbst sperrt.
+- **Praktikanten** (`intern` in rules.json, Dienste in config `intern_services`): Praktikanten nur in
+  Praktikanten-Dienste (sonst Sperre im Frontend), andere dort nur mit Rückfrage. Vorschläge besetzen
+  Praktikanten-Dienste nur mit Praktikanten und normale Dienste nur mit Nicht-Praktikanten;
+  `suggestion_labels()` = `suggestion_services ∪ intern_services` (eigener Config-Schlüssel, weil ältere
+  config.json-Dateien `suggestion_services` bereits fest enthalten).
 - **Vorschläge** (`planner.suggest_assignments`, Feld `suggestions` in `/api/view`): nur offene Dienste
   aus `relevant_labels_for_group ∩ suggestion_services`; Rangfolge Limit nicht erreicht → am längsten
   nicht dran → wenig Einsätze im Monat → Name; jede Person max. einmal pro Event. Das Frontend
@@ -82,6 +87,8 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.5.0: Regel „Praktikant/in“ (nur Praktikanten-Dienste) inkl. Vorschlägen für Praktikanten-Dienste.
+  41 Tests grün (inkl. 7 Browser-Tests).
 - V2.4.0: Gesperrte Tage je Person und verbindliches Monatslimit (Nutzerwunsch für Praktikanten:
   max. 1×/Monat, an bestimmten Tagen nicht verfügbar). 36 Tests grün (inkl. 6 Browser-Tests).
 - V2.3.0: Monatsübersicht (mehrere Events einer Gruppe planen, verteilte Vorschläge, gemeinsames Speichern).

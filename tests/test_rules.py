@@ -57,3 +57,13 @@ def test_hard_limit_and_old_dates_pruned():
     assert not rules.PersonRule(5, max_per_month=1).limit_blocks(3)  # weich: sperrt nie
     old = rules.parse_blocked_dates([{"from": "2024-01-01"}], today=date(2026, 10, 18))
     assert old == []
+
+
+def test_intern_flag_roundtrip(tmp_path):
+    p = tmp_path / "rules.json"
+    rules.save_rules(p, {7: rules.PersonRule(7, intern=True)})
+    assert json.loads(p.read_text()) == {"persons": [{"personId": 7, "intern": True}]}
+    r = rules.load_rules(p)[7]
+    assert r.intern and r.to_api()["intern"]
+    assert r.fits_service("Praktikant I Tontechnik", {"Praktikant I Tontechnik"})
+    assert not r.fits_service("Ton", {"Praktikant I Tontechnik"})

@@ -295,6 +295,7 @@ function renderPersons(loadingText) {
     p.absent && badge('abwesend', 'absent'),
     p.rule_blocked && badge(`Regel: ${p.rule_reason}`, 'absent'),
     !p.rule_blocked && p.rule_reason && badge(p.rule_reason),
+    p.intern && badge('Praktikant', 'intern'),
     p.limit_reached && badge(`Limit ${p.month_count}/${p.rule.max_per_month}`, 'rule'),
     p.in_event.length > 0 && badge(`schon: ${p.in_event.join(', ')}`, 'pending'),
     el('span', { class: 'last', title: 'Letzter Einsatz in diesen Diensten' }, p.last_date ? fmtDate(p.last_date) : '–'));
@@ -417,6 +418,13 @@ function assign(row, person) {
     alert(`Regel: ${person.name} – ${person.rule_reason}.\nÄndern unter „Regeln“.`);
     return;
   }
+  const internServices = (state.view && state.view.intern_services) || [];
+  const isInternService = internServices.includes(row.label);
+  if (person.intern && !isInternService) {
+    alert(`${person.name} ist als Praktikant/in markiert und kann nur in Praktikanten-Dienste eingeteilt werden.`);
+    return;
+  }
+  if (!person.intern && isInternService && !confirm(`${person.name} ist nicht als Praktikant/in markiert. Trotzdem in „${row.label}“ einteilen?`)) return;
   const already = person.in_event.filter((label) => !(row.person && row.person.id === person.id && label === row.label));
   if (already.length && !confirm(`${person.name} ist in diesem Event schon eingeteilt (${already.join(', ')}). Trotzdem einteilen?`)) return;
   if (person.limit_reached && !confirm(`${person.name} hat das Monatslimit erreicht (${person.month_count}/${person.rule.max_per_month}). Trotzdem einteilen?`)) return;

@@ -135,3 +135,18 @@ def test_suggest_month_skips_past_events():
     ev = {"id": 1, "date": date(2026, 10, 4), "rows": [{"request_id": 5, "label": "Ton", "person": None}],
           "absent": set(), "in_event": {}, "past": True}
     assert planner.suggest_month([ev], [{"id": 1, "name": "A"}], [], {}, {"Ton"}) == {}
+
+
+def test_suggest_month_respects_hard_limit_and_blocked_dates():
+    import rules
+    ton = lambda rid: {"request_id": rid, "label": "Ton", "person": None}  # noqa: E731
+    events = [
+        {"id": 1, "date": date(2026, 11, 1), "rows": [ton(11)], "absent": set(), "in_event": {}},
+        {"id": 2, "date": date(2026, 11, 8), "rows": [ton(21)], "absent": set(), "in_event": {}},
+        {"id": 3, "date": date(2026, 11, 15), "rows": [ton(31)], "absent": set(), "in_event": {}},
+    ]
+    persons = [{"id": 1, "name": "Praktikant"}]
+    r = rules.PersonRule(1, max_per_month=1, limit_hard=True,
+                         blocked_dates=rules.parse_blocked_dates([{"from": "2026-11-01"}], today=date(2026, 10, 1)))
+    sug = planner.suggest_month(events, persons, [], {1: r}, {"Ton"})
+    assert list(sug) == [(2, 21)]   # 01.11. gesperrt, 08.11. eingeplant, danach Limit 1/Monat erreicht

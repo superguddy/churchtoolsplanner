@@ -194,3 +194,14 @@ button.linklike:hover { text-decoration: underline; }
   .monthsummary { border-left: none; padding-left: 0; }
 }
 table.month tr.past td { color: var(--muted); background: #fafbfc; }
+
+/* Regeln: Sperrtage + verbindliches Limit */
+.limitcell { display: flex; flex-direction: column; gap: 2px; }
+.limitcell label { display: flex; gap: 4px; align-items: center; margin: 0; }
+.datecell { display: flex; flex-direction: column; gap: 4px; min-width: 260px; }
+.datechip { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font-size: 12px;
+  padding: 1px 8px; border-radius: 10px; background: var(--bad-weak); color: var(--bad); }
+.dateadder { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.card .dateadder input { display: inline-block; margin-top: 0; width: auto; font: inherit; font-size: 12px;
+  padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; }
+.card .dateadder input.datenote { width: 90px; }

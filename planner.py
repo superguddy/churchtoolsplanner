@@ -383,6 +383,8 @@ def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[d
                 dist = min(dists) if dists else None
                 count = sum(1 for d, q in assigned if q == pid and d.year == day.year and d.month == day.month)
                 limit = bool(rule and rule.max_per_month and count >= rule.max_per_month)
+                if limit and rule.limit_hard:
+                    continue  # verbindliches Monatslimit: nie vorschlagen
                 key = (limit, -(dist if dist is not None else 10 ** 6), count, p["name"].lower())
                 if best is None or key < best[0]:
                     best = (key, p, dist, limit)

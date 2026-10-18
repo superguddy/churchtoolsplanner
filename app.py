@@ -17,14 +17,14 @@ from typing import Any, Callable
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import planner
 import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.4.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -376,8 +376,9 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
         for row in [*info, *services]:
             p = row.get("person")
             rule = rules.get(p["id"]) if p and p.get("id") else None
-            if rule and rule.blocks(day):
-                p["rule_reason"] = rule.summary()
+            reason = rule.block_reason(day) if rule else None
+            if reason:
+                p["rule_reason"] = reason
         in_event = planner.event_person_services(event, service_names(), SETTINGS)
         view["event"] = {"id": event_id, "display": planner.event_display(event, SETTINGS.tz),
                          "date": day.isoformat() if day else None,
@@ -392,16 +393,24 @@ def build_view(group_id: int | None, event_id: int | None) -> dict:
         history = planner.assignments(service_history(), service_names(), SETTINGS, relevant)
         last = planner.last_assignment_dates(history, {p["id"] for p in persons})
         month_counts = planner.counts_in_month(history, day.year, day.month) if day else {}
+        here = {}  # Einsaetze in diesem Event (zaehlen beim verbindlichen Limit nicht als "anderswo")
+        for row in view["services"]:
+            pid = (row.get("person") or {}).get("id")
+            if pid and row["label"] in relevant:
+                here[pid] = here.get(pid, 0) + 1
         rows = []
         for p in persons:
             rule = rules.get(p["id"]) or rules_mod.PersonRule(p["id"])
             count = month_counts.get(p["id"], 0)
+            reason = rule.block_reason(day)
+            if not reason and day and rule.limit_blocks(count - here.get(p["id"], 0)):
+                reason = f"{rule.limit_text()} erreicht"
             rows.append({
                 **p,
                 "absent": p["id"] in absent,
                 "rule": rule.to_api(),
-                "rule_blocked": rule.blocks(day),
-                "rule_reason": rule.summary(),
+                "rule_blocked": reason is not None,
+                "rule_reason": reason or rule.summary(),
                 "month_count": count,
                 "limit_reached": bool(day and rule.max_per_month and count >= rule.max_per_month),
                 "in_event": in_event.get(p["id"], []),
@@ -454,9 +463,17 @@ def api_rules() -> dict:
     return {"groups": groups, "persons": rows, "weekdays": rules_mod.WEEKDAYS}
 
 
+class BlockedDatesBody(BaseModel):
+    from_: str = Field(alias="from")
+    to: str | None = None
+    note: str = ""
+
+
 class RuleBody(BaseModel):
     blocked_weekdays: list[int] = []
     max_per_month: int | None = None
+    limit_hard: bool = False
+    blocked_dates: list[BlockedDatesBody] = []
     note: str = ""
 
 
@@ -468,6 +485,8 @@ def api_rule(person_id: int, body: RuleBody) -> dict:
         {d for d in body.blocked_weekdays if 0 <= d <= 6},
         body.max_per_month if body.max_per_month and body.max_per_month > 0 else None,
         body.note.strip()[:500],
+        body.limit_hard,
+        rules_mod.parse_blocked_dates([{"from": b.from_, "to": b.to, "note": b.note} for b in body.blocked_dates]),
     )
     rules[person_id] = rule
     rules_mod.save_rules(RULES_PATH, rules)
@@ -578,7 +597,7 @@ def build_month(group_id: int, month: str, overrides: dict[tuple[int, int], int 
         _, services = planner.build_event_rows(ev, svc_names, SETTINGS, absent)
         rows = [r for r in services if r["label"] in relevant]
         in_event = planner.event_person_services(ev, svc_names, SETTINGS)
-        blocked = {p["id"]: rules[p["id"]].summary() for p in persons
+        blocked = {p["id"]: rules[p["id"]].block_reason(day) for p in persons
                    if p["id"] in rules and rules[p["id"]].blocks(day)}
         events_out.append({
             "id": ev["id"], "display": planner.event_display(ev, SETTINGS.tz), "date": day.isoformat(),

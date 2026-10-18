@@ -66,7 +66,8 @@ async function saveHidden(person, groupId, hidden) {
 }
 
 function hasRule(p) {
-  return p.rule.blocked_weekdays.length || p.rule.max_per_month || p.rule.note || p.hidden_in.length;
+  return p.rule.blocked_weekdays.length || p.rule.max_per_month || p.rule.note || p.hidden_in.length
+    || p.rule.blocked_dates.length;
 }
 
 function render() {
@@ -78,7 +79,7 @@ function render() {
     (!groupId || p.groups.includes(groupId)) && (!q || p.name.toLowerCase().includes(q)) && (!onlyRules || hasRule(p)));
 
   if (!rows.length) {
-    $('rulesBody').replaceChildren(el('tr', {}, el('td', { colspan: '5', class: 'empty' }, 'Keine Personen gefunden.')));
+    $('rulesBody').replaceChildren(el('tr', {}, el('td', { colspan: '6', class: 'empty' }, 'Keine Personen gefunden.')));
     return;
   }
   $('rulesBody').replaceChildren(...rows.map((p) => {
@@ -96,10 +97,23 @@ function render() {
       }, name);
     }), p.rule.summary ? el('span', { class: 'muted small' }, p.rule.summary) : null);
 
-    const max = el('input', {
-      type: 'number', min: '0', max: '31', class: 'num', value: p.rule.max_per_month || '',
-      onchange: (e) => { const v = parseInt(e.target.value, 10); p.rule.max_per_month = v > 0 ? v : null; saveRule(p, false); },
-    });
+    const max = el('div', { class: 'limitcell' },
+      el('input', {
+        type: 'number', min: '0', max: '31', class: 'num', value: p.rule.max_per_month || '',
+        onchange: (e) => { const v = parseInt(e.target.value, 10); p.rule.max_per_month = v > 0 ? v : null; saveRule(p); },
+      }),
+      p.rule.max_per_month ? el('label', {
+        class: 'check small', title: 'Angehakt: nach Erreichen des Limits wie abwesend (gesperrt). Sonst nur Rückfrage.',
+      }, el('input', { type: 'checkbox', checked: !!p.rule.limit_hard, onchange: (e) => { p.rule.limit_hard = e.target.checked; saveRule(p); } }),
+      ' verbindlich') : null);
+
+    const dates = el('div', { class: 'datecell' },
+      ...p.rule.blocked_dates.map((b, i) => el('span', { class: 'datechip', title: b.note || '' }, b.label,
+        el('button', {
+          type: 'button', class: 'linklike', title: 'Sperrtag entfernen', 'aria-label': `Sperrtag ${b.label} entfernen`,
+          onclick: () => { p.rule.blocked_dates = p.rule.blocked_dates.filter((_, j) => j !== i); saveRule(p); },
+        }, '✕'))),
+      dateAdder(p));
     const note = el('input', {
       type: 'text', class: 'note', maxlength: '500', value: p.rule.note || '', placeholder: '—',
       onchange: (e) => { p.rule.note = e.target.value; saveRule(p, false); },
@@ -110,8 +124,31 @@ function render() {
 
     return el('tr', { id: `p${p.id}`, class: hasRule(p) ? 'hasrule' : '' },
       el('td', {}, p.name, el('div', { class: 'muted small' }, `ID ${p.id}`)),
-      el('td', {}, days), el('td', {}, max), el('td', {}, note), el('td', {}, hidden));
+      el('td', {}, days), el('td', {}, dates), el('td', {}, max), el('td', {}, note), el('td', {}, hidden));
   }));
+}
+
+// Eingabe fuer neue Sperrtage: Von (Pflicht), Bis (optional, sonst ein Tag), Notiz
+const openAdders = new Set(); // Personen, bei denen die Sperrtag-Eingabe aufgeklappt ist
+
+function dateAdder(p) {
+  if (!openAdders.has(p.id)) {
+    return el('button', {
+      type: 'button', class: 'linklike small', onclick: () => { openAdders.add(p.id); render(); },
+    }, '+ Sperrtag');
+  }
+  const from = el('input', { type: 'date', class: 'date', 'aria-label': 'gesperrt von' });
+  const to = el('input', { type: 'date', class: 'date', 'aria-label': 'gesperrt bis (optional)', title: 'bis (optional)' });
+  const note = el('input', { type: 'text', class: 'datenote', placeholder: 'Grund', maxlength: '200' });
+  const add = () => {
+    if (!from.value) { from.focus(); return; }
+    p.rule.blocked_dates = [...p.rule.blocked_dates, { from: from.value, to: to.value || from.value, note: note.value }];
+    openAdders.delete(p.id);
+    saveRule(p);
+  };
+  return el('div', { class: 'dateadder' }, from, '–', to, note,
+    el('button', { type: 'button', class: 'small', onclick: add }, 'hinzufügen'),
+    el('button', { type: 'button', class: 'secondary small', onclick: () => { openAdders.delete(p.id); render(); } }, 'abbrechen'));
 }
 
 async function init() {

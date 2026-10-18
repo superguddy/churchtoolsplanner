@@ -181,6 +181,10 @@ function setPerson(ev, row, personId, { ask = true } = {}) {
     if (others && !confirm(`${person.name} ist in diesem Event schon eingeteilt (${others.join(', ')}). Trotzdem?`)) return false;
     const max = person.rule.max_per_month;
     const count = monthCounts().get(personId) || 0;
+    if (max && count >= max && person.rule.limit_hard) {
+      alert(`${person.name}: verbindliches Monatslimit erreicht (${count}/${max}).`);
+      return false;
+    }
     if (max && count >= max && !confirm(`${person.name} hat das Monatslimit erreicht (${count}/${max}). Trotzdem?`)) return false;
   }
   if (personId === orig) state.pending.delete(k);
@@ -255,9 +259,11 @@ function cell(ev, row, slot, counts) {
     if (ev.blocked[String(p.id)]) { marks.push(`Regel: ${ev.blocked[String(p.id)]}`); disabled = true; }
     if (others.has(p.id)) marks.push(`schon: ${others.get(p.id).join(', ')}`);
     const c = counts.get(p.id) || 0;
-    if (p.rule.max_per_month && c >= p.rule.max_per_month) marks.push(`Limit ${c}/${p.rule.max_per_month}`);
-    else if (c) marks.push(`${c}×`);
     const isSel = p.id === pid;
+    if (p.rule.max_per_month && c >= p.rule.max_per_month) {
+      marks.push(`Limit ${c}/${p.rule.max_per_month}${p.rule.limit_hard ? ' verbindlich' : ''}`);
+      if (p.rule.limit_hard && !isSel) disabled = true;
+    } else if (c) marks.push(`${c}×`);
     options.push(el('option', { value: String(p.id), selected: isSel, disabled: disabled && !isSel },
       p.name + (marks.length ? ` (${marks.join(', ')})` : '')));
   }
@@ -292,7 +298,8 @@ function renderSummary() {
     const over = p.rule.max_per_month && c > p.rule.max_per_month;
     return el('tr', { class: c === 0 ? 'zero' : '' },
       el('td', { title: p.rule.summary ? `Regel: ${p.rule.summary}` : '' }, p.name, p.rule.summary ? ` (${p.rule.summary})` : ''),
-      el('td', { class: over ? 'error' : '' }, p.rule.max_per_month ? `${c}/${p.rule.max_per_month}` : c),
+      el('td', { class: over ? 'error' : '', title: p.rule.limit_hard ? 'verbindliches Limit' : '' },
+        p.rule.max_per_month ? `${c}/${p.rule.max_per_month}${p.rule.limit_hard ? ' !' : ''}` : c),
       el('td', {}, fmtDate(p.last_before)));
   }));
 }

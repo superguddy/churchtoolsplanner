@@ -55,6 +55,14 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
   übernehmen; nach Handänderungen „Vorschläge neu berechnen“. Seitenleiste: Einsätze pro Person im Monat.
   „Speichern“ schreibt alle Events auf einmal, mit derselben Konfliktprüfung. Vergangene Events nur lesend.
 
+## Seit 2.4.0 (z. B. für Praktikanten)
+- **Gesperrte Tage** je Person (einzelne Daten oder Zeiträume mit Grund) auf der Seite Regeln über
+  „+ Sperrtag“. Wirken wie eine Abwesenheit (Planung, Monat, Vorschläge), gelten aber nur im Planer.
+  Einträge, die über ein Jahr zurückliegen, werden beim Speichern automatisch entfernt.
+- **Monatslimit „verbindlich“**: Mit Häkchen ist die Person nach Erreichen des Limits für weitere Einsätze
+  im Monat gesperrt (z. B. Praktikant max. 1×/Monat) und wird nicht mehr vorgeschlagen; ohne Häkchen wie
+  bisher nur eine Rückfrage.
+
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen
 `tests/fake_ct.py`, einen simulierten ChurchTools-Server (Login test/test). Die Browser-Tests

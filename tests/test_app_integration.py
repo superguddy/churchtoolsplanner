@@ -134,3 +134,30 @@ def test_month_overview_and_save(client):
 
 def test_month_rejects_bad_month(client):
     assert client.get("/api/month", params={"group_id": 41, "month": "2026-13"}).status_code == 400
+
+
+def test_blocked_date_and_hard_limit_in_view(client):
+    ev = next(e for e in client.get("/api/events").json() if e["id"] == 1003)
+    day = ev["start"][:10]
+    client.put("/api/rules/3003", headers=H, json={"blocked_dates": [{"from": day, "note": "Prüfung"}]})
+    v = client.get("/api/view", params={"group_id": 41, "event_id": 1003}).json()
+    dario = next(p for p in v["persons"] if p["id"] == 3003)
+    assert dario["rule_blocked"] and dario["rule_reason"].startswith("gesperrt") and "Prüfung" in dario["rule_reason"]
+    assert all(s["person_id"] != 3003 for s in v["suggestions"].values())
+    m = client.get("/api/month", params={"group_id": 41, "month": day[:7]}).json()
+    assert "3003" in next(e for e in m["events"] if e["id"] == 1003)["blocked"]
+    client.put("/api/rules/3003", headers=H, json={})
+    # verbindliches Limit = bisherige Einsaetze im Monat: im eigenen Event nicht gesperrt (zaehlt nicht
+    # als "anderswo"), in einem weiteren Event desselben Monats schon
+    ev1 = next(e for e in client.get("/api/events").json() if e["id"] == 1001)
+    v = client.get("/api/view", params={"group_id": 41, "event_id": 1001}).json()
+    count = next(p for p in v["persons"] if p["id"] == 3001)["month_count"]
+    assert count >= 1
+    client.put("/api/rules/3001", headers=H, json={"max_per_month": count, "limit_hard": True})
+    v = client.get("/api/view", params={"group_id": 41, "event_id": 1001}).json()
+    assert not next(p for p in v["persons"] if p["id"] == 3001)["rule_blocked"]
+    if ev1["start"][:7] == day[:7]:
+        v = client.get("/api/view", params={"group_id": 41, "event_id": 1003}).json()
+        beat = next(p for p in v["persons"] if p["id"] == 3001)
+        assert beat["rule_blocked"] and f"max. {count}×/Monat erreicht" in beat["rule_reason"]
+    client.put("/api/rules/3001", headers=H, json={})

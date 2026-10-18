@@ -1,19 +1,41 @@
-"""Personen-Regeln (rules.json): gesperrte Wochentage, Monatslimit, Notiz.
+"""Personen-Regeln (rules.json): gesperrte Wochentage, gesperrte Tage, Monatslimit, Notiz.
 
 Format (neu):
-  {"persons": [{"personId": 2453, "blockedWeekdays": [0,1,2,3,4,5], "maxPerMonth": 2, "note": "..."}]}
-Wochentage: 0 = Montag ... 6 = Sonntag.
+  {"persons": [{"personId": 2453, "blockedWeekdays": [0,1,2,3,4,5], "maxPerMonth": 1, "limitHard": true,
+                "blockedDates": [{"from": "2026-11-12", "to": "2026-11-14", "note": "Pruefung"}], "note": "..."}]}
+Wochentage: 0 = Montag ... 6 = Sonntag. limitHard: Monatslimit sperrt (sonst nur Rueckfrage).
 Alte Eintraege {"personId": .., "onlySunday": true} werden beim Lesen als Mo–Sa gesperrt uebernommen.
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 ALL_DAYS = frozenset(range(7))
+KEEP_PAST_DATES_DAYS = 365  # vergangene Sperrtage werden nach einem Jahr beim Speichern entfernt
+
+
+@dataclass
+class BlockedDates:
+    start: date
+    end: date
+    note: str = ""
+
+    def contains(self, day: date) -> bool:
+        return self.start <= day <= self.end
+
+    def label(self) -> str:
+        text = f"{self.start:%d.%m.%Y}" if self.start == self.end else f"{self.start:%d.%m.}–{self.end:%d.%m.%Y}"
+        return f"{text} ({self.note})" if self.note else text
+
+    def to_json(self) -> dict:
+        out = {"from": self.start.isoformat(), "to": self.end.isoformat()}
+        if self.note.strip():
+            out["note"] = self.note.strip()
+        return out
 
 
 @dataclass
@@ -22,9 +44,12 @@ class PersonRule:
     blocked_weekdays: set[int] = field(default_factory=set)
     max_per_month: int | None = None
     note: str = ""
+    limit_hard: bool = False
+    blocked_dates: list[BlockedDates] = field(default_factory=list)
 
     def is_empty(self) -> bool:
-        return not self.blocked_weekdays and not self.max_per_month and not self.note.strip()
+        return (not self.blocked_weekdays and not self.max_per_month and not self.note.strip()
+                and not self.blocked_dates)
 
     def summary(self) -> str:
         """Kurztext fuer Badges, z. B. "nur So", "nie Mi" oder "nie Mo, Mi"."""
@@ -37,8 +62,26 @@ class PersonRule:
             return "nur " + ", ".join(WEEKDAYS[d] for d in allowed)
         return "nie " + ", ".join(WEEKDAYS[d] for d in sorted(self.blocked_weekdays))
 
+    def block_reason(self, day: date | None) -> str | None:
+        """Grund, warum die Person an diesem Tag nicht eingeplant werden darf (Wochentag oder Sperrtag)."""
+        if not day:
+            return None
+        for b in self.blocked_dates:
+            if b.contains(day):
+                return "gesperrt " + b.label()
+        if day.weekday() in self.blocked_weekdays:
+            return self.summary()
+        return None
+
     def blocks(self, day: date | None) -> bool:
-        return bool(day and day.weekday() in self.blocked_weekdays)
+        return self.block_reason(day) is not None
+
+    def limit_blocks(self, count_elsewhere: int) -> bool:
+        """Verbindliches Monatslimit: schon so viele Einsaetze in anderen Events dieses Monats."""
+        return bool(self.limit_hard and self.max_per_month and count_elsewhere >= self.max_per_month)
+
+    def limit_text(self) -> str:
+        return f"max. {self.max_per_month}×/Monat" if self.max_per_month else ""
 
     def to_json(self) -> dict:
         out: dict = {"personId": self.person_id}
@@ -46,13 +89,40 @@ class PersonRule:
             out["blockedWeekdays"] = sorted(self.blocked_weekdays)
         if self.max_per_month:
             out["maxPerMonth"] = self.max_per_month
+            if self.limit_hard:
+                out["limitHard"] = True
+        if self.blocked_dates:
+            out["blockedDates"] = [b.to_json() for b in sorted(self.blocked_dates, key=lambda b: b.start)]
         if self.note.strip():
             out["note"] = self.note.strip()
         return out
 
     def to_api(self) -> dict:
         return {"blocked_weekdays": sorted(self.blocked_weekdays), "max_per_month": self.max_per_month,
-                "note": self.note, "summary": self.summary()}
+                "limit_hard": bool(self.max_per_month and self.limit_hard), "note": self.note,
+                "blocked_dates": [{**b.to_json(), "label": b.label()}
+                                  for b in sorted(self.blocked_dates, key=lambda b: b.start)],
+                "summary": self.summary()}
+
+
+def parse_blocked_dates(items, today: date | None = None) -> list[BlockedDates]:
+    """Liest [{"from", "to"?, "note"?}]; ungueltige und laengst vergangene Eintraege fallen weg."""
+    out: list[BlockedDates] = []
+    cutoff = (today or date.today()) - timedelta(days=KEEP_PAST_DATES_DAYS)
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = date.fromisoformat(str(item.get("from"))[:10])
+            end = date.fromisoformat(str(item.get("to") or item.get("from"))[:10])
+        except ValueError:
+            continue
+        if end < start:
+            start, end = end, start
+        if end < cutoff:
+            continue
+        out.append(BlockedDates(start, end, str(item.get("note") or "")[:200]))
+    return out
 
 
 def _parse(raw: dict) -> PersonRule | None:
@@ -68,7 +138,8 @@ def _parse(raw: dict) -> PersonRule | None:
         blocked |= set(range(6))
     max_pm = r.get("maxpermonth")
     max_pm = int(max_pm) if isinstance(max_pm, (int, float)) and max_pm > 0 else None
-    return PersonRule(pid, blocked, max_pm, str(r.get("note") or ""))
+    return PersonRule(pid, blocked, max_pm, str(r.get("note") or ""), bool(r.get("limithard")),
+                      parse_blocked_dates(r.get("blockeddates")))
 
 
 def load_rules(path: Path) -> dict[int, PersonRule]:

@@ -18,7 +18,8 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - `ct_api.py` – ChurchTools-REST-Client (httpx, Cookie-Login, Paging, CSRF-Token fail-open,
   automatische Neuanmeldung bei 401).
 - `planner.py` – reine Planungslogik ohne Netzwerk (Dienst-Zuordnung, Abwesenheiten, Statistik, Sortierung).
-- `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, Monatslimit, Notiz.
+- `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, gesperrte Tage/Zeiträume, Monatslimit
+  (weich oder `limitHard`), Notiz. `block_reason(day)` liefert den Sperrgrund.
 - `login_store.py` – gemerkter Login, Passwort per Windows-DPAPI (ctypes), übernimmt alten C#-Login.
 - `static/` – `index.html`/`app.js` (Planung), `month.html`/`month.js` (Monat), `rules.html`/`rules.js` (Regeln), `style.css`.
 - `config_defaults/` – Startwerte für `rules.json`/`hidden_persons.json` (nur beim ersten Start kopiert).
@@ -41,8 +42,10 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - **`isValid=false`** in `eventServices` = abgesagte/ersetzte Anfrage → ignorieren (Anzeige + Statistik).
 - **Speichern** schickt nur Änderungen, jeweils mit `expected_person_id`; weicht der aktuelle CT-Stand ab,
   wird diese Änderung nicht geschrieben, sondern als Fehler gemeldet.
-- Regeln blockieren wie Abwesenheiten (Wochentag); Monatslimit und „schon im Event eingeteilt“ sind
-  nur Rückfragen.
+- Regeln blockieren wie Abwesenheiten (Wochentag, Sperrtage, verbindliches Monatslimit); weiches
+  Monatslimit und „schon im Event eingeteilt“ sind nur Rückfragen. Verbindliches Limit zählt nur Einsätze
+  in ANDEREN Events des Monats (`limit_blocks(count - here)`), damit eine bestehende Einteilung im
+  gewählten Event nicht sich selbst sperrt.
 - **Vorschläge** (`planner.suggest_assignments`, Feld `suggestions` in `/api/view`): nur offene Dienste
   aus `relevant_labels_for_group ∩ suggestion_services`; Rangfolge Limit nicht erreicht → am längsten
   nicht dran → wenig Einsätze im Monat → Name; jede Person max. einmal pro Event. Das Frontend
@@ -73,12 +76,14 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Keine Zugangsdaten oder Inhalte aus `Tool/` in Ausgaben oder Commits übernehmen.
 
 ## Offene Punkte / zu prüfen am echten ChurchTools
-- „Entfernen“ ruft `POST /api/events/{id}/servicerequests/{rid}/decline` auf (wie die WPF-App). Annahme:
-  danach erscheint die Anfrage mit `isValid=false`. An einem Test-Event prüfen.
+- ~~„Entfernen“ = `POST .../servicerequests/{rid}/decline`~~ – vom Nutzer am echten ChurchTools bestätigt
+  (wird als Absage übernommen, 18.10.2026).
 - CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.4.0: Gesperrte Tage je Person und verbindliches Monatslimit (Nutzerwunsch für Praktikanten:
+  max. 1×/Monat, an bestimmten Tagen nicht verfügbar). 36 Tests grün (inkl. 6 Browser-Tests).
 - V2.3.0: Monatsübersicht (mehrere Events einer Gruppe planen, verteilte Vorschläge, gemeinsames Speichern).
   32 Tests grün (inkl. 6 Browser-Tests).
 - V2.2.0: Automatischer Vorschlag für offene Dienste (pro Dienst oder alle übernehmen). 27 Tests grün
@@ -86,4 +91,4 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - V2.1.0: Regel-Seite (Wochentage, Monatslimit, Notiz, Ausblenden je Gruppe), Hinweis bei Doppel-
   Einteilung, Konfliktprüfung beim Speichern, automatische Neuanmeldung. 23 Tests grün (inkl. 4 Browser-Tests).
 - V2.0.0: Portierung von C#/WPF nach Python/FastAPI, Fix der veralteten Event-Anzeige.
-- Noch nicht am echten ChurchTools getestet.
+- Am echten ChurchTools bisher nur „Entfernen“ bestätigt; übrige Funktionen nur gegen `fake_ct.py` getestet.

@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -267,6 +267,11 @@ def rules_page() -> FileResponse:
     return FileResponse(APP_DIR / "static" / "rules.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/monat")
+def month_page() -> FileResponse:
+    return FileResponse(APP_DIR / "static" / "month.html", headers={"Cache-Control": "no-store"})
+
+
 # ---------------------------------------------------------------------- Login
 class LoginBody(BaseModel):
     username: str
@@ -493,8 +498,8 @@ class SaveBody(BaseModel):
     changes: list[Change]
 
 
-@app.post("/api/events/{event_id}/save")
-def api_save(event_id: int, body: SaveBody) -> dict:
+def save_changes(event_id: int, changes: list[Change], prefix: str = "") -> tuple[int, list[str]]:
+    """Schreibt Aenderungen eines Events nach ChurchTools; nur wo der CT-Stand noch dem erwarteten entspricht."""
     client = SESSION.require()
     SESSION.invalidate("event")  # frischer Stand, um Aenderungen anderer zu erkennen
     current = event_detail(event_id)
@@ -503,15 +508,15 @@ def api_save(event_id: int, body: SaveBody) -> dict:
     names = service_names()
     errors: list[str] = []
     done = 0
-    for ch in body.changes:
+    for ch in changes:
         es = entries.get(ch.request_id)
         if es is None:
-            errors.append(f"Anfrage {ch.request_id} gehoert nicht (mehr) zu diesem Event.")
+            errors.append(f"{prefix}Anfrage {ch.request_id} gehoert nicht (mehr) zu diesem Event.")
             continue
         now_pid, now_name = planner.service_entry_person(es)
         if now_pid != ch.expected_person_id:
             label = planner.service_label(es, names, SETTINGS) or "Dienst"
-            errors.append(f"{label}: wurde inzwischen in ChurchTools geaendert (jetzt: {now_name or 'leer'}) "
+            errors.append(f"{prefix}{label}: wurde inzwischen in ChurchTools geaendert (jetzt: {now_name or 'leer'}) "
                           "- nicht ueberschrieben.")
             continue
         try:
@@ -521,10 +526,139 @@ def api_save(event_id: int, body: SaveBody) -> dict:
                 client.decline_service_request(event_id, ch.request_id)
             done += 1
         except ChurchToolsError as exc:
-            errors.append(str(exc))
-    SESSION.invalidate("event", "history", "events")
-    view = build_view(body.group_id, event_id)
-    return {"saved": done, "errors": errors, "view": view}
+            errors.append(f"{prefix}{exc}")
+    SESSION.invalidate("event", "history", "events", "month")
+    return done, errors
+
+
+@app.post("/api/events/{event_id}/save")
+def api_save(event_id: int, body: SaveBody) -> dict:
+    done, errors = save_changes(event_id, body.changes)
+    return {"saved": done, "errors": errors, "view": build_view(body.group_id, event_id)}
+
+
+# ---------------------------------------------------------------------- Monatsuebersicht
+def month_bounds(month: str) -> tuple[date, date]:
+    try:
+        first = datetime.strptime(month, "%Y-%m").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Monat im Format JJJJ-MM angeben.") from exc
+    return planner.month_bounds(first, 0)
+
+
+def build_month(group_id: int, month: str, overrides: dict[tuple[int, int], int | None]) -> dict:
+    """Alle Events eines Monats mit den Diensten der Gruppe, Verfuegbarkeit je Event und Vorschlaegen.
+
+    overrides: vorgemerkte (noch nicht gespeicherte) Aenderungen der Oberflaeche, (event_id, request_id) ->
+    PersonId oder None. Sie fliessen nur in die Vorschlaege ein.
+    """
+    client = SESSION.require()
+    group = group_or_404(group_id)
+    first, last = month_bounds(month)
+    relevant = SETTINGS.relevant_labels_for_group(group.get("name"))
+    labels = [lbl for lbl in SETTINGS.plannable_services if lbl in relevant]
+    persons = group_persons(group_id)
+    names_by_pid = {p["id"]: p["name"] for p in persons}
+    rules = load_rules()
+    svc_names = service_names()
+    month_events = SESSION.cached(("month", month), lambda: client.get_events(
+        first, last + timedelta(days=1), include_services=True))
+    absences = SESSION.cached(("month_absences", group_id, month), lambda: client.get_group_absences(
+        group_id, first, last), ttl=300)
+
+    events_out: list[dict] = []
+    sim_events: list[dict] = []
+    month_history: list[tuple[date, int]] = []
+    for ev in sorted(month_events, key=lambda e: e.get("startDate") or ""):
+        local = planner.event_local_start(ev, SETTINGS.tz)
+        if not local or not (first <= local.date() <= last):
+            continue
+        day = local.date()
+        absent = planner.absent_person_ids(absences, day)
+        _, services = planner.build_event_rows(ev, svc_names, SETTINGS, absent)
+        rows = [r for r in services if r["label"] in relevant]
+        in_event = planner.event_person_services(ev, svc_names, SETTINGS)
+        blocked = {p["id"]: rules[p["id"]].summary() for p in persons
+                   if p["id"] in rules and rules[p["id"]].blocks(day)}
+        events_out.append({
+            "id": ev["id"], "display": planner.event_display(ev, SETTINGS.tz), "date": day.isoformat(),
+            "past": day < today_local(), "rows": rows, "absent": sorted(absent), "blocked": {str(k): v for k, v in blocked.items()},
+            "in_event": {str(k): v for k, v in in_event.items()},
+        })
+        # Simulation fuer Vorschlaege: vorgemerkte Aenderungen einrechnen
+        sim_rows, sim_in_event = [], {k: list(v) for k, v in in_event.items()}
+        for r in rows:
+            key = (ev["id"], r["request_id"])
+            r2 = dict(r)
+            if key in overrides:
+                old = r.get("person") or {}
+                if old.get("id") and r["label"] in sim_in_event.get(old["id"], []):
+                    sim_in_event[old["id"]].remove(r["label"])
+                    if not sim_in_event[old["id"]]:
+                        del sim_in_event[old["id"]]
+                pid = overrides[key]
+                r2["person"] = {"id": pid, "name": names_by_pid.get(pid, "")} if pid else None
+                if pid:
+                    sim_in_event.setdefault(pid, []).append(r["label"])
+            if r2.get("person") and r2["person"].get("id"):
+                month_history.append((day, r2["person"]["id"]))
+            sim_rows.append(r2)
+        sim_events.append({"id": ev["id"], "date": day, "rows": sim_rows, "absent": absent,
+                           "in_event": sim_in_event, "past": day < today_local()})
+
+    month_ids = {e["id"] for e in events_out}
+    other = [ev for ev in service_history() if ev.get("id") not in month_ids]
+    history = planner.assignments(other, svc_names, SETTINGS, relevant) + month_history
+    last_dates = planner.last_assignment_dates(
+        [(d, p) for d, p in history if d < first], {p["id"] for p in persons})
+    suggestions = planner.suggest_month(sim_events, persons, history, rules,
+                                        relevant & set(CONFIG["suggestion_services"]))
+    return {
+        "group_id": group_id, "month": month, "labels": labels, "events": events_out,
+        "persons": [{**p, "rule": (rules.get(p["id"]) or rules_mod.PersonRule(p["id"])).to_api(),
+                     "last_before": last_dates[p["id"]].isoformat() if p["id"] in last_dates else None}
+                    for p in sorted(persons, key=lambda x: x["name"].lower())],
+        "suggestions": [{"event_id": e, "request_id": r, **v} for (e, r), v in suggestions.items()],
+    }
+
+
+@app.get("/api/month")
+def api_month(group_id: int, month: str) -> dict:
+    return build_month(group_id, month, {})
+
+
+class MonthChange(Change):
+    event_id: int
+
+
+class MonthBody(BaseModel):
+    group_id: int
+    month: str
+    changes: list[MonthChange] = []
+
+
+@app.post("/api/month/suggest")
+def api_month_suggest(body: MonthBody) -> dict:
+    overrides = {(c.event_id, c.request_id): c.person_id for c in body.changes}
+    return {"suggestions": build_month(body.group_id, body.month, overrides)["suggestions"]}
+
+
+@app.post("/api/month/save")
+def api_month_save(body: MonthBody) -> dict:
+    by_event: dict[int, list[Change]] = {}
+    for c in body.changes:
+        by_event.setdefault(c.event_id, []).append(c)
+    displays = {}
+    try:
+        displays = {e["id"]: e["display"] for e in build_month(body.group_id, body.month, {})["events"]}
+    except ChurchToolsError:
+        pass
+    done, errors = 0, []
+    for event_id, changes in sorted(by_event.items()):
+        d, errs = save_changes(event_id, changes, prefix=f"{displays.get(event_id, event_id)}: ")
+        done += d
+        errors += errs
+    return {"saved": done, "errors": errors, "view": build_month(body.group_id, body.month, {})}
 
 
 @app.post("/api/reload")

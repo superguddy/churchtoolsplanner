@@ -350,3 +350,49 @@ def suggest_assignments(services: list[dict], persons: list[dict], labels: set[s
             reason += ", Monatslimit erreicht"
         out[row["request_id"]] = {"person_id": pick["id"], "name": pick["name"], "reason": reason}
     return out
+
+
+def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[date, int]],
+                  rules_by_pid: dict, labels: set[str]) -> dict[tuple[int, int], dict]:
+    """Vorschlaege fuer alle offenen Dienste mehrerer Events (Monatsuebersicht).
+
+    events: [{"id", "date": date, "rows": [Dienst-Zeilen], "absent": set[int], "in_event": {pid: [labels]},
+              "past": bool (optional, dann keine Vorschlaege)}]
+    history: alle bekannten Einsaetze (Tag, PersonId) in den relevanten Diensten, inkl. dieses Monats.
+    Die Events werden chronologisch durchgerechnet; jeder Vorschlag zaehlt sofort als Einsatz, damit sich
+    die Dienste verteilen. Rangfolge: Monatslimit nicht erreicht -> groesster Abstand zum naechsten
+    Einsatz (davor oder danach) -> wenig Einsaetze im Monat -> Name.
+    """
+    assigned = list(history)
+    out: dict[tuple[int, int], dict] = {}
+    for ev in sorted(events, key=lambda e: e["date"]):
+        day = ev["date"]
+        if ev.get("past"):
+            continue  # vergangene Events nur fuer die Historie, keine Vorschlaege
+        used = set(ev.get("in_event") or {})
+        for row in ev["rows"]:
+            if row.get("person") or not row.get("request_id") or row.get("label") not in labels:
+                continue
+            best = None
+            for p in persons:
+                pid = p["id"]
+                rule = rules_by_pid.get(pid)
+                if pid in used or pid in ev["absent"] or (rule and rule.blocks(day)):
+                    continue
+                dists = [abs((d - day).days) for d, q in assigned if q == pid]
+                dist = min(dists) if dists else None
+                count = sum(1 for d, q in assigned if q == pid and d.year == day.year and d.month == day.month)
+                limit = bool(rule and rule.max_per_month and count >= rule.max_per_month)
+                key = (limit, -(dist if dist is not None else 10 ** 6), count, p["name"].lower())
+                if best is None or key < best[0]:
+                    best = (key, p, dist, limit)
+            if not best:
+                continue
+            _, p, dist, limit = best
+            used.add(p["id"])
+            assigned.append((day, p["id"]))
+            reason = "noch nie eingeteilt" if dist is None else f"Abstand {dist} Tage"
+            if limit:
+                reason += ", Monatslimit erreicht"
+            out[(ev["id"], row["request_id"])] = {"person_id": p["id"], "name": p["name"], "reason": reason}
+    return out

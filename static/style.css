@@ -171,3 +171,26 @@ input.note { width: 100%; min-width: 160px; font: inherit; padding: 4px 6px; bor
 .servicesHead { display: flex; align-items: center; gap: 10px; }
 .suggestion { color: var(--accent); font-size: 12px; margin-left: 6px; }
 .suggestion button { padding: 0 8px; font-size: 12px; }
+
+/* ---------- Monatsuebersicht ---------- */
+.monthpage { flex: 1; min-height: 0; padding: 10px; display: flex; }
+.monthnav { display: flex; align-items: center; gap: 8px; }
+.monthnav strong { min-width: 130px; text-align: center; }
+.monthlayout { display: grid; grid-template-columns: 1fr 280px; gap: 12px; flex: 1; min-height: 0; }
+table.month td, table.month th { text-align: left; vertical-align: top; padding: 6px 8px; }
+table.month td.evname { white-space: nowrap; font-weight: 600; }
+.mcell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; margin-bottom: 4px; }
+.mcell select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; max-width: 260px; }
+.mcell.changed { background: var(--pending); }
+.mcell.conflict select { border-color: var(--bad); color: var(--bad); }
+button.linklike { background: none; border: none; color: var(--accent); padding: 0; text-align: left; cursor: pointer; }
+button.linklike:hover { text-decoration: underline; }
+.monthsummary { border-left: 1px solid var(--line); padding-left: 12px; overflow: auto; }
+.monthsummary h3 { margin-top: 0; }
+.monthsummary td, .monthsummary th { text-align: left; }
+.monthsummary tr.zero td { color: var(--muted); }
+@media (max-width: 1000px) {
+  .monthlayout { grid-template-columns: 1fr; }
+  .monthsummary { border-left: none; padding-left: 0; }
+}
+table.month tr.past td { color: var(--muted); background: #fafbfc; }

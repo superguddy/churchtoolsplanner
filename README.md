@@ -47,6 +47,14 @@ Der Server lauscht nur auf `127.0.0.1`, weil er die ChurchTools-Anmeldung hält.
   vor – gespeichert wird erst mit „Speichern“. Für welche Dienste: `suggestion_services` in config.json
   (Standard Podcast, Ton, Bild; Praktikanten-Dienste bewusst nicht).
 
+## Seit 2.3.0
+- Seite **Monat** (`/monat`): Gruppe und Monat wählen, alle Events des Monats als Tabelle
+  (Zeilen = Events, Spalten = Dienste der Gruppe). Pro Zelle Personen-Auswahl mit Markierungen
+  (abwesend/Regel gesperrt, schon im Event, Anzahl Einsätze im Monat, Limit). Vorschläge werden über den
+  ganzen Monat verteilt berechnet (grösster Abstand zum nächsten Einsatz) und lassen sich einzeln oder alle
+  übernehmen; nach Handänderungen „Vorschläge neu berechnen“. Seitenleiste: Einsätze pro Person im Monat.
+  „Speichern“ schreibt alle Events auf einmal, mit derselben Konfliktprüfung. Vergangene Events nur lesend.
+
 ## Tests
 `pip install -r requirements-dev.txt`, dann `python -m pytest tests`. Die Tests laufen gegen
 `tests/fake_ct.py`, einen simulierten ChurchTools-Server (Login test/test). Die Browser-Tests

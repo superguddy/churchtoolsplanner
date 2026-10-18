@@ -20,7 +20,7 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - `planner.py` – reine Planungslogik ohne Netzwerk (Dienst-Zuordnung, Abwesenheiten, Statistik, Sortierung).
 - `rules.py` – Personen-Regeln (`rules.json`): gesperrte Wochentage, Monatslimit, Notiz.
 - `login_store.py` – gemerkter Login, Passwort per Windows-DPAPI (ctypes), übernimmt alten C#-Login.
-- `static/` – `index.html`/`app.js` (Planung), `rules.html`/`rules.js` (Regeln), `style.css`.
+- `static/` – `index.html`/`app.js` (Planung), `month.html`/`month.js` (Monat), `rules.html`/`rules.js` (Regeln), `style.css`.
 - `config_defaults/` – Startwerte für `rules.json`/`hidden_persons.json` (nur beim ersten Start kopiert).
 - `tests/` – pytest; `fake_ct.py` = simulierter ChurchTools-Server (Login test/test).
 
@@ -48,6 +48,13 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   nicht dran → wenig Einsätze im Monat → Name; jede Person max. einmal pro Event. Das Frontend
   verwirft Vorschläge für Dienste/Personen mit vorgemerkten Änderungen (`activeSuggestions`) und
   übernimmt sie nur als Vormerkung (pending), nie direkt nach ChurchTools.
+- **Monatsübersicht** (`build_month`, `/api/month`, `/api/month/suggest`, `/api/month/save`):
+  Events des Monats direkt per `get_events(..., include_services=True)` (Cache-Schlüssel `month`),
+  Abwesenheiten für den Monat separat. Vorschläge über `planner.suggest_month`: Events chronologisch,
+  jeder Vorschlag zählt sofort als Einsatz; Rangfolge Limit → grösster Abstand zum nächsten Einsatz
+  (vorher oder nachher) → wenig Einsätze im Monat → Name; vergangene Events nie. Vorgemerkte Änderungen
+  werden für „neu berechnen“ als `overrides` mitgeschickt. Speichern läuft je Event über `save_changes`
+  (gleiche Konfliktprüfung wie die Planung).
 - Dienst-Zuordnung über Namen: längster passender Präfix aus `info_services`/`plannable_services`
   plus `service_aliases` (config.json). Welche Dienste für Statistik/Rotation einer Gruppe zählen:
   `group_services` (Gruppenname enthält Schlüssel).
@@ -72,6 +79,8 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.3.0: Monatsübersicht (mehrere Events einer Gruppe planen, verteilte Vorschläge, gemeinsames Speichern).
+  32 Tests grün (inkl. 6 Browser-Tests).
 - V2.2.0: Automatischer Vorschlag für offene Dienste (pro Dienst oder alle übernehmen). 27 Tests grün
   (inkl. 5 Browser-Tests).
 - V2.1.0: Regel-Seite (Wochentage, Monatslimit, Notiz, Ausblenden je Gruppe), Hinweis bei Doppel-

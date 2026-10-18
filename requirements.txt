@@ -1,4 +1,4 @@
-# ChurchTools Planer v2.2.0 (Python)
+# ChurchTools Planer v2.3.0 (Python)
 # Python 3.10–3.14, Windows x64
 
 fastapi

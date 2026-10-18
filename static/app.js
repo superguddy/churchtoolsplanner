@@ -160,6 +160,7 @@ function confirmDiscard() {
 function selectGroup(id) {
   if (state.groupId === id) return;
   state.groupId = id;
+  $('monthLink').href = `/monat?group=${id}`;
   state.selectedPersonId = null;
   renderGroups();
   refreshView();

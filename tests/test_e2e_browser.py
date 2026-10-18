@@ -133,3 +133,24 @@ def test_rules_page(page, planner_url):
     assert page.locator("#rulesBody tr").count() >= 2   # Anna (nur So) + Beat (nie Sa)
     page.goto(planner_url)
     page.wait_for_selector("#mainView:not([hidden])")
+
+
+def test_month_page_apply_suggestions_and_save(page, planner_url):
+    import fake_ct
+    fake_ct.reset()
+    page.request.post(planner_url + "api/reload", headers={"X-Planner": "1"})
+    month = fake_ct.sunday_offset(1).strftime("%Y-%m")
+    page.goto(f"{planner_url}monat?group=41&month={month}")
+    page.wait_for_selector("table.month select")
+    assert "Ton" in page.inner_text("#monthHead")
+    page.wait_for_selector("#suggestAllBtn:not([hidden])")
+    page.click("#suggestAllBtn")
+    assert page.is_hidden("#suggestAllBtn") and not page.is_disabled("#saveBtn")
+    page.click("#saveBtn")
+    page.wait_for_function("document.getElementById('saveStatus').textContent.includes('Gespeichert')")
+    # nach dem Speichern sind die Zellen besetzt (Auswahl != leer) und nichts mehr vorgemerkt
+    assert page.locator(".mcell.changed").count() == 0
+    selected = page.eval_on_selector_all("table.month select", "els => els.map(e => e.value)")
+    assert any(v for v in selected)
+    page.goto(planner_url)
+    page.wait_for_selector("#mainView:not([hidden])")

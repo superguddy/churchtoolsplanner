@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monat – ChurchTools Planer</title>
+  <link rel="stylesheet" href="/static/style.css?v=2.3.0">
+</head>
+<body>
+  <header class="topbar">
+    <h1>ChurchTools – Monat</h1>
+    <span id="userInfo" class="muted"></span>
+    <nav class="nav"><a href="/">Planung</a><a href="/monat" class="active">Monat</a><a href="/regeln">Regeln</a></nav>
+    <span class="spacer"></span>
+  </header>
+
+  <main class="monthpage">
+    <section class="card wide">
+      <div class="filters">
+        <label>Gruppe <select id="groupSelect"></select></label>
+        <div class="monthnav">
+          <button id="prevMonth" class="secondary" title="Vormonat">‹</button>
+          <strong id="monthLabel"></strong>
+          <button id="nextMonth" class="secondary" title="Nächster Monat">›</button>
+        </div>
+        <button id="suggestAllBtn" hidden>Alle Vorschläge übernehmen</button>
+        <button id="recalcBtn" class="secondary" hidden title="Vorschläge mit den vorgemerkten Änderungen neu berechnen">Vorschläge neu berechnen</button>
+      </div>
+      <div class="monthlayout">
+        <div class="tablewrap">
+          <table class="month">
+            <thead id="monthHead"></thead>
+            <tbody id="monthBody"><tr><td class="empty">Gruppe wählen.</td></tr></tbody>
+          </table>
+        </div>
+        <aside class="monthsummary">
+          <h3>Einsätze im Monat</h3>
+          <p class="muted small">inkl. vorgemerkter Änderungen</p>
+          <table><thead><tr><th>Name</th><th>Anz.</th><th>Zuletzt davor</th></tr></thead><tbody id="summaryBody"></tbody></table>
+        </aside>
+      </div>
+      <div class="savebar">
+        <button id="saveBtn" disabled>Speichern</button>
+        <button id="discardBtn" class="secondary" disabled>Verwerfen</button>
+        <span id="saveStatus" class="muted"></span>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/month.js?v=2.3.0"></script>
+</body>
+</html>

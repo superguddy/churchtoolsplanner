@@ -109,3 +109,29 @@ def test_suggestion_uses_limit_person_only_as_last_resort():
     sug = planner.suggest_assignments(services, [_p(7, "Limit", limit_reached=True)], {"Ton"})
     assert sug[1]["name"] == "Limit" and "Monatslimit" in sug[1]["reason"]
     assert planner.suggest_assignments(services, [], {"Ton"}) == {}
+
+
+def test_suggest_month_spreads_and_respects_rules():
+    import rules
+    ton = lambda rid: {"request_id": rid, "label": "Ton", "person": None}  # noqa: E731
+    events = [
+        {"id": 1, "date": date(2026, 11, 1), "rows": [ton(11)], "absent": set(), "in_event": {}},
+        {"id": 2, "date": date(2026, 11, 8), "rows": [ton(21)], "absent": {2}, "in_event": {}},
+        {"id": 3, "date": date(2026, 11, 11), "rows": [ton(31)], "absent": set(), "in_event": {}},  # Mittwoch
+        {"id": 4, "date": date(2026, 11, 15), "rows": [ton(41)], "absent": set(), "in_event": {}},
+    ]
+    persons = [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}]
+    history = [(date(2026, 10, 25), 1)]                       # A war vor einer Woche dran
+    rule_c = {3: rules.PersonRule(3, {2})}                      # C nie mittwochs
+    sug = planner.suggest_month(events, persons, history, rule_c, {"Ton"})
+    picks = {e: v["name"] for (e, _), v in sug.items()}
+    # 01.11.: B (nie dran; A erst vor 7 Tagen) | 08.11.: C (B abwesend) | 11.11. Mi: A (C gesperrt,
+    # A 17 Tage Abstand > B 10 Tage) | 15.11.: B (14 Tage Abstand, A 4, C 7)
+    assert picks == {1: "B", 2: "C", 3: "A", 4: "B"}
+    assert sug[(1, 11)]["reason"] == "noch nie eingeteilt" and sug[(4, 41)]["reason"] == "Abstand 14 Tage"
+
+
+def test_suggest_month_skips_past_events():
+    ev = {"id": 1, "date": date(2026, 10, 4), "rows": [{"request_id": 5, "label": "Ton", "person": None}],
+          "absent": set(), "in_event": {}, "past": True}
+    assert planner.suggest_month([ev], [{"id": 1, "name": "A"}], [], {}, {"Ton"}) == {}

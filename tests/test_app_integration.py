@@ -105,3 +105,32 @@ def test_view_contains_suggestions(client):
     # Podcast gehoert nicht zur Tontechnik-Gruppe -> kein Vorschlag
     podcast = next(s for s in v["services"] if s["label"] == "Podcast")
     assert str(podcast["request_id"]) not in v["suggestions"]
+
+
+def _month_of(client, event_id):
+    ev = next(e for e in client.get("/api/events").json() if e["id"] == event_id)
+    return ev["start"][:7]
+
+
+def test_month_overview_and_save(client):
+    month = _month_of(client, 1003)
+    m = client.get("/api/month", params={"group_id": 41, "month": month}).json()
+    assert m["labels"] == ["Ton", "Praktikant I Tontechnik"]
+    ev = next(e for e in m["events"] if e["id"] == 1003)
+    assert "2453" in ev["blocked"]                              # Anna: nur So, Event ist Mittwoch
+    sug = [s for s in m["suggestions"] if s["event_id"] == 1003]
+    assert sug and sug[0]["person_id"] != 2453
+    # Vorgemerkte Aenderung fliesst in neue Vorschlaege ein: Person nicht doppelt im selben Event
+    pid = sug[0]["person_id"]
+    again = client.post("/api/month/suggest", headers=H, json={"group_id": 41, "month": month, "changes": [
+        {"event_id": 1003, "request_id": 30, "person_id": pid, "expected_person_id": None}]}).json()
+    assert not [s for s in again["suggestions"] if s["event_id"] == 1003]
+    res = client.post("/api/month/save", headers=H, json={"group_id": 41, "month": month, "changes": [
+        {"event_id": 1003, "request_id": 30, "person_id": pid, "expected_person_id": None}]}).json()
+    assert res["saved"] == 1 and not res["errors"]
+    row = next(e for e in res["view"]["events"] if e["id"] == 1003)["rows"][0]
+    assert row["person"]["id"] == pid
+
+
+def test_month_rejects_bad_month(client):
+    assert client.get("/api/month", params={"group_id": 41, "month": "2026-13"}).status_code == 400

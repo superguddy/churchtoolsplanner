@@ -218,3 +218,35 @@ def test_service_setup_add_and_remove(client, fake_ct_url):
     # Dienste ausserhalb der Technik-Gruppe werden abgelehnt
     r = client.post("/api/events/1003/servicesetup", headers=H, json={"changes": [{"service_id": 3, "count": 1}]})
     assert r.status_code == 400
+
+
+def test_service_setup_rest_sends_full_list(client, fake_ct_url):
+    """REST-Variante: vollstaendiger Soll-Stand, damit auch eine 'ersetzt alles'-Auslegung nichts loescht."""
+    import sys
+
+    import httpx
+    app_mod = sys.modules["app"]
+    app_mod.CONFIG["service_setup_api"] = "rest"
+    try:
+        before = client.get("/api/events/1003/servicesetup").json()
+        res = client.post("/api/events/1003/servicesetup", headers=H,
+                          json={"group_id": 32, "changes": [{"service_id": 10, "count": 1}]}).json()
+    finally:
+        app_mod.CONFIG["service_setup_api"] = "ajax"
+    body = [w for w in httpx.get(f"{fake_ct_url}/test/writes").json() if w[0] == "services_rest"][-1][2]
+    sent = {s["serviceId"]: s["count"] for s in body["services"]}
+    assert body["eventId"] == 1003 and sent[10] == 1
+    assert sent[11] == 1  # bestehender Dienst (Tontechnik) bleibt im Soll-Stand
+    labels = [s["label"] for s in res["view"]["services"]]
+    assert labels.count("Podcast") == 1 and "Ton" in labels
+    assert before["services"]  # Dialog lieferte vorher Daten
+    sid_counts = {s["service_id"]: s["count"] for s in res["services"]}
+    assert sid_counts[10] == 1
+
+
+def test_events_loaded_by_range_without_paging(client, fake_ct_url):
+    import httpx
+    client.post("/api/reload", headers=H)
+    client.get("/api/events")
+    queries = httpx.get(f"{fake_ct_url}/test/event_queries").json()
+    assert queries and all("direction" not in q and "to" in q for q in queries)

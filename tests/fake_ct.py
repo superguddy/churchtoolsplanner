@@ -10,7 +10,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 app = FastAPI()
 TODAY = date.today()
@@ -33,6 +33,7 @@ GROUPS = [{"id": 41, "name": "Tontechnik"}, {"id": 32, "name": "Podcast"},
 MEMBERS = {41: [1, 2453, 3001, 3002, 3003, 3662, 3010], 32: [1, 4001, 3662], 38: [1, 3002]}
 EVENT_DELAYS: dict[int, float] = {1001: 2.5}
 WRITES: list[tuple] = []
+EVENT_QUERIES: list[dict] = []
 
 
 def person_ref(pid: int) -> dict:
@@ -84,6 +85,7 @@ def reset() -> None:
     EVENTS.clear()
     EVENTS.update(make_events())
     WRITES.clear()
+    EVENT_QUERIES.clear()
     EVENT_DELAYS.clear()
 
 
@@ -158,17 +160,24 @@ def absences(gid: int):
 
 
 @app.get("/api/events")
-def events(request: Request, page: int = 1, limit: int = 50):
+def events(request: Request, page: int = 1, limit: int = 10):
+    """Wie laut REST-Doku: from+to = ganzer Zeitraum (to inklusive, page/limit ignoriert);
+    from+direction = seitenweise, `to` wird dann ignoriert."""
     q = request.query_params
-    f, t = date.fromisoformat(q["from"]), date.fromisoformat(q["to"])
+    EVENT_QUERIES.append(dict(q))
+    f = date.fromisoformat(q["from"])
+    paged = "direction" in q
+    t = None if paged else date.fromisoformat(q["to"])
     out = []
     for ev in sorted(EVENTS.values(), key=lambda e: e["startDate"]):
         d = date.fromisoformat(ev["startDate"][:10])
-        if f <= d < t:
+        if f <= d and (t is None or d <= t):
             item = dict(ev)
             if q.get("include") != "eventServices":
                 item.pop("eventServices")
             out.append(item)
+    if not paged:
+        return {"data": out, "meta": {"count": len(out)}}
     chunk = out[(page - 1) * limit: page * limit]
     return {"data": chunk, "meta": {"pagination": {"current": page, "lastPage": max(1, -(-len(out) // limit))}}}
 
@@ -213,20 +222,39 @@ async def legacy_ajax(request: Request):
         return {"status": "error", "message": "unbekannte Funktion"}
     eid = int(form["id"])
     WRITES.append(("services", eid, form))
-    entries = EVENTS[eid]["eventServices"]
     i = 0
     while f"col{i}" in form:
-        sid = int(form[f"col{i}"])
         want = int(form.get(f"count{i}") or 0) if form.get(f"val{i}") == "checked" else 0
-        current = [e for e in entries if e["serviceId"] == sid and e.get("isValid", True)]
-        for _ in range(want - len(current)):
-            new_id = max(e["id"] for ev in EVENTS.values() for e in ev["eventServices"]) + 1
-            entries.append(es(new_id, sid, None, counter=len(current) + 1))
-        if want < len(current):
-            for e in sorted(current, key=lambda e: (e["personId"] is not None, -e["counter"]))[:len(current) - want]:
-                e["isValid"] = False
+        set_service_count(eid, int(form[f"col{i}"]), want)
         i += 1
     return {"status": "success", "data": None}
+
+
+@app.put("/api/events/{eid}/servicerequests")
+async def put_service_counts(eid: int, request: Request):
+    """REST-Variante. Strengste Auslegung: nicht genannte Dienste werden entfernt."""
+    body = await request.json()
+    WRITES.append(("services_rest", eid, body))
+    wanted = {int(s["serviceId"]): int(s["count"]) for s in body["services"]}
+    for sid in {e["serviceId"] for e in EVENTS[eid]["eventServices"]} | set(wanted):
+        set_service_count(eid, sid, wanted.get(sid, 0))
+    return Response(status_code=204)
+
+
+def set_service_count(eid: int, sid: int, want: int) -> None:
+    entries = EVENTS[eid]["eventServices"]
+    current = [e for e in entries if e["serviceId"] == sid and e.get("isValid", True)]
+    for _ in range(want - len(current)):
+        new_id = max(e["id"] for ev in EVENTS.values() for e in ev["eventServices"]) + 1
+        entries.append(es(new_id, sid, None, counter=len(current) + 1))
+    if want < len(current):
+        for e in sorted(current, key=lambda e: (e["personId"] is not None, -e["counter"]))[:len(current) - want]:
+            e["isValid"] = False
+
+
+@app.get("/test/event_queries")
+def event_queries():
+    return EVENT_QUERIES
 
 
 @app.get("/test/writes")

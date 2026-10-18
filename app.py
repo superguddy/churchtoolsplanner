@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.6.1"
+APP_VERSION = "2.6.2"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -58,6 +58,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "future_event_days": 84,
     "history_days": 365,
     "cache_seconds": 120,
+    # "ajax" = wie die CT-Weboberflaeche (churchservice/ajax, am echten CT aufgezeichnet),
+    # "rest" = PUT /api/events/{id}/servicerequests (laut Doku aktuell, am echten CT noch ungetestet)
+    "service_setup_api": "ajax",
 }
 
 
@@ -629,7 +632,13 @@ def api_service_setup_save(event_id: int, body: ServiceSetupBody) -> dict:
     bad = [sid for sid, _ in changes if sid not in allowed]
     if bad:
         raise HTTPException(status_code=400, detail=f"Dienst(e) {bad} koennen hier nicht geaendert werden.")
-    client.set_event_services(event_id, changes)
+    if CONFIG.get("service_setup_api") == "rest":
+        SESSION.invalidate("event")
+        counts = planner.event_service_counts(event_detail(event_id))
+        counts.update(dict(changes))
+        client.set_event_services_rest(event_id, counts)
+    else:
+        client.set_event_services(event_id, changes)
     SESSION.invalidate("event", "history", "events", "month")
     return {"view": build_view(body.group_id, event_id),
             "services": planner.event_service_setup(event_detail(event_id), services_full(), setup_group_ids())}

@@ -96,8 +96,23 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   damit nichts versehentlich entfernt wird. RISIKO: ChurchTools schaltet `churchservice/ajax` schrittweise
   ab (Academy „Discontinued and deleted APIs“). Fällt die Funktion weg, Fehlermeldung beachten und die neue
   Anfrage der CT-Oberfläche erneut aufzeichnen lassen. Am echten CT noch nicht über den Planer getestet.
-- **Erkenntnisse aus der offiziellen REST-Doku** (Nutzer hat 18.10.2026 nur den Bereich „Person“ der
-  openapi.json geliefert; Events/Services/Groups fehlen noch – bei Bedarf nachfordern):
+- **REST-Variante für „Dienste bearbeiten“** (V2.6.2): Laut vollständiger openapi.json gibt es
+  `PUT /api/events/{id}/servicerequests` mit `{eventId, services:[{serviceId, count}]}` (nicht veraltet;
+  `PUT .../eventservices` ist veraltet). Die Doku sagt nicht, ob fehlende Dienste entfernt werden – darum
+  schickt `set_event_services_rest` immer den VOLLSTÄNDIGEN Soll-Stand aller Dienste des Events
+  (`planner.event_service_counts` + Änderungen). Schalter config `service_setup_api`: `"ajax"` (Standard,
+  wie CT-Oberfläche) oder `"rest"` (am echten CT noch ungetestet; erst an einem Test-Event prüfen).
+  Restrisiko: Dienste aus Dienstgruppen, die der angemeldete Nutzer nicht sieht, fehlen im Soll-Stand.
+- **GET /events** (laut Doku): from+to = ganzer Zeitraum, page/limit ignoriert, `to` inklusive (wird
+  später exklusiv); from+direction = seitenweise, dann wird `to` ignoriert. Bis V2.6.1 schickten wir
+  direction UND to → CT lieferte alle künftigen Events (bis 200 Seiten). Seit V2.6.2 nur from+to, eine
+  Abfrage, Nachfilter auf startDate < Ende.
+- Laut Doku bringt `GET /events/{id}/services/{sid}/possiblepersons` CT-eigene Daten (Abwesenheiten,
+  `monthlyUtilization`, `serviceGroupPreferences.maxPerMonth`) – bisher nicht genutzt, möglicher Ersatz/
+  Ergänzung für unsere Monatslimits.
+- Login-Token: `GET /persons/{id}/logintoken` + Header `Authorization: Login <token>` – nicht umgesetzt.
+- **Erkenntnisse aus der offiziellen REST-Doku** (Bereich „Person“, 18.10.2026; vollständige
+  openapi.json kam danach, siehe oben):
   - `EventReadAssignment`: `isAccepted` (statt veraltet `agreed`), `index` (statt veraltet `counter`),
     `isValid=false` = abgesagt/ersetzt. Verborgene Person = Platzhalter mit `icon: "user-shield"`; dessen
     `domainIdentifier` ist NICHT die echte Personen-ID (`planner.is_concealed`).
@@ -109,6 +124,9 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (18.10.2026)
+- V2.6.2: Events nur noch per from+to laden (vorher wurde `to` wegen direction ignoriert), REST-Variante
+  für „Dienste bearbeiten“ (config `service_setup_api`, Standard weiter "ajax"), Absage schickt
+  `{"comment": null}`. 48 Tests grün.
 - V2.6.1: Anpassungen nach REST-Doku (verborgene Personen, isAccepted/index, nur aktive Gruppenmitglieder,
   verständliche Meldung bei veralteter Anfrage-ID). 46 Tests grün.
 - V2.6.0: „Dienste bearbeiten“ (Dienste zum Event hinzufügen/entfernen/Anzahl) in Planung und Monat.

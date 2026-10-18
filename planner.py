@@ -421,6 +421,15 @@ def suggest_month(events: list[dict], persons: list[dict], history: list[tuple[d
     return out
 
 
+def event_service_counts(event: dict) -> dict[int, int]:
+    """Aktuelle Anzahl je Dienst (alle Dienstgruppen) = Zahl der gueltigen Anfragen im Event."""
+    counts: dict[int, int] = {}
+    for es in event.get("eventServices") or []:
+        if isinstance(es, dict) and service_entry_is_current(es) and es.get("serviceId") is not None:
+            counts[es["serviceId"]] = counts.get(es["serviceId"], 0) + 1
+    return counts
+
+
 def event_service_setup(event: dict, services: list[dict], group_ids: set[int]) -> list[dict]:
     """Dienste der Dienstgruppen `group_ids` mit aktueller Anzahl im Event und eingeteilten Personen.
 

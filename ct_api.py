@@ -17,7 +17,6 @@ class ChurchToolsError(Exception):
 
 
 class ChurchToolsClient:
-    EVENTS_PAGE_LIMIT = 50  # CT beantwortet je nach Instanz groessere Limits mit 400
     MAX_PAGES = 200  # Sicherheitsbremse wie im C#-Original
 
     def __init__(self, base_url: str, timeout: float = 30.0):
@@ -124,17 +123,18 @@ class ChurchToolsClient:
         return self._get_json(f"/api/events/{event_id}").get("data") or {}
 
     def get_events(self, from_day: date, to_exclusive: date, include_services: bool) -> list[dict]:
-        base = {"from": from_day.isoformat(), "to": to_exclusive.isoformat()}
+        """Alle Events im Zeitraum mit einer einzigen Abfrage.
+
+        Laut REST-Doku (GET /events): Mit from+to liefert CT den ganzen Zeitraum, page/limit werden ignoriert.
+        Seitenweises Laden funktioniert nur mit from+direction - dann wird aber `to` ignoriert und CT liefert
+        alle kuenftigen Events. `to` ist (noch) inklusive, darum wird zusaetzlich nach Datum gefiltert.
+        """
+        params = {"from": from_day.isoformat(), "to": to_exclusive.isoformat()}
         if include_services:
-            base["include"] = "eventServices"
-        try:
-            return self._get_paged("/api/events", {**base, "direction": "forward", "canceled": "0"},
-                                   limit=self.EVENTS_PAGE_LIMIT)
-        except ChurchToolsError as exc:
-            # Manche Instanzen moegen direction/canceled nicht -> ohne nochmal versuchen (wie C#-Original)
-            if "(400)" not in str(exc):
-                raise
-            return self._get_paged("/api/events", base, limit=self.EVENTS_PAGE_LIMIT)
+            params["include"] = "eventServices"
+        items = self._get_json("/api/events", params).get("data") or []
+        end = to_exclusive.isoformat()
+        return [ev for ev in items if isinstance(ev, dict) and str(ev.get("startDate") or "")[:10] < end]
 
     # ------------------------------------------------------------------ Schreiben
     def assign_service_request(self, event_id: int, request_id: int, person_id: int) -> None:
@@ -170,9 +170,24 @@ class ChurchToolsClient:
         if isinstance(body, dict) and body.get("status") not in (None, "success"):
             raise ChurchToolsError(f"Dienste aendern fehlgeschlagen: {body.get('message') or body.get('data') or body}")
 
+    def set_event_services_rest(self, event_id: int, counts: dict[int, int]) -> None:
+        """REST-Variante: PUT /api/events/{id}/servicerequests mit {eventId, services: [{serviceId, count}]}.
+
+        Laut Doku nicht veraltet (im Gegensatz zu PUT .../eventservices). Ob CT die Liste als vollstaendig
+        versteht (fehlende Dienste = entfernen) oder nur die genannten Dienste aendert, sagt die Doku nicht.
+        Darum wird hier immer der VOLLSTAENDIGE Soll-Stand aller Dienste des Events geschickt - das ist in
+        beiden Faellen richtig. Am echten CT noch nicht getestet (config service_setup_api = "rest").
+        """
+        payload = {"eventId": event_id,
+                   "services": [{"serviceId": sid, "count": n} for sid, n in sorted(counts.items())]}
+        resp = self._request("PUT", f"/api/events/{event_id}/servicerequests", json=payload,
+                             headers=self._write_headers())
+        if resp.status_code >= 400:
+            raise ChurchToolsError(f"Dienste aendern fehlgeschlagen ({resp.status_code}): {resp.text[:500]}")
+
     def decline_service_request(self, event_id: int, request_id: int) -> None:
         resp = self._request("POST", f"/api/events/{event_id}/servicerequests/{request_id}/decline",
-                             json={}, headers=self._write_headers())
+                             json={"comment": None}, headers=self._write_headers())
         if resp.status_code >= 400:
             raise ChurchToolsError(f"Absagen fehlgeschlagen ({resp.status_code}): {resp.text[:500]}")
 

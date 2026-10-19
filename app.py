@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.6.4"
+APP_VERSION = "2.6.5"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -61,6 +61,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # "ajax" = wie die CT-Weboberflaeche (churchservice/ajax, am echten CT aufgezeichnet),
     # "rest" = PUT /api/events/{id}/servicerequests (laut Doku aktuell, am echten CT noch ungetestet)
     "service_setup_api": "ajax",
+    # nur bei "rest": Entfernen/Verkleinern ebenfalls ueber REST ("rest") statt churchservice/ajax ("ajax")
+    "service_remove_api": "ajax",
 }
 
 
@@ -639,7 +641,9 @@ def api_service_setup_save(event_id: int, body: ServiceSetupBody) -> dict:
         SESSION.invalidate("event")
         current = planner.event_service_counts(event_detail(event_id))
         shrink = [(sid, n) for sid, n in changes if n < current.get(sid, 0)]
-        grow = [(sid, n) for sid, n in changes if n >= current.get(sid, 0)]
+        if CONFIG.get("service_remove_api") == "rest":
+            shrink = []  # Test: auch Entfernen/Verkleinern ueber REST
+        grow = [(sid, n) for sid, n in changes if (sid, n) not in shrink]
         if shrink:
             client.set_event_services(event_id, shrink)
         if grow:

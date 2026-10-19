@@ -271,3 +271,25 @@ def test_service_setup_rest_removes_via_ajax(client, fake_ct_url):
     assert [w[0] for w in new] == ["services"]
     assert new[0][2] == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": "0"}
     assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]
+
+
+def test_service_setup_rest_remove_option(client, fake_ct_url):
+    """service_remove_api = "rest": auch Entfernen ueber PUT .../servicerequests (count 0)."""
+    import sys
+
+    import httpx
+    app_mod = sys.modules["app"]
+    app_mod.CONFIG.update(service_setup_api="rest", service_remove_api="rest")
+    try:
+        client.post("/api/events/1003/servicesetup", headers=H,
+                    json={"group_id": 32, "changes": [{"service_id": 10, "count": 1}]})
+        n_before = len(httpx.get(f"{fake_ct_url}/test/writes").json())
+        res = client.post("/api/events/1003/servicesetup", headers=H,
+                          json={"group_id": 32, "changes": [{"service_id": 10, "count": 0}]}).json()
+    finally:
+        app_mod.CONFIG.update(service_setup_api="ajax", service_remove_api="ajax")
+    new = httpx.get(f"{fake_ct_url}/test/writes").json()[n_before:]
+    assert [w[0] for w in new] == ["services_rest"]
+    sent = {s["serviceId"]: s["count"] for s in new[0][2]["services"]}
+    assert sent[10] == 0 and sent[11] == 1
+    assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]

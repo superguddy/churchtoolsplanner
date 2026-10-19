@@ -110,6 +110,9 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   Test Nutzer 19.10.2026 mit "rest": Hinzufügen funktioniert; Entfernen (count 0) NICHT – CT macht die
   Anfragen nur ungültig (Planer zeigt den Dienst nicht mehr), im CT bleibt der Dienst aber aktiv.
   Seit V2.6.3 laufen darum Entfernen/Verkleinern auch im REST-Modus über churchservice/ajax.
+  Vermutlich war das Testergebnis aber nur die fehlende Aktualisierung der offenen CT-Seite (siehe oben).
+  V2.6.5: Schalter `service_remove_api` ("ajax" Standard / "rest") zum erneuten Test von REST-Entfernen
+  (count 0 im vollständigen Soll-Stand).
 - **GET /events** (laut Doku): from+to = ganzer Zeitraum, page/limit ignoriert, `to` inklusive (wird
   später exklusiv); from+direction = seitenweise, dann wird `to` ignoriert. Bis V2.6.1 schickten wir
   direction UND to → CT lieferte alle künftigen Events (bis 200 Seiten). Seit V2.6.2 nur from+to, eine
@@ -131,6 +134,8 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (19.10.2026)
+- V2.6.5: Schalter `service_remove_api` = "rest" (zusammen mit `service_setup_api` = "rest"), um
+  Entfernen über REST erneut zu testen. 50 Tests grün.
 - V2.6.4: Dienst entfernen schickt `countN=0` statt leer (wie CT-Oberfläche). 49 Tests grün.
   Am echten CT bestätigt: Hinzufügen (REST) und Entfernen (ajax) funktionieren.
 - V2.6.3: Im REST-Modus Entfernen/Verkleinern von Diensten über churchservice/ajax (REST entfernt

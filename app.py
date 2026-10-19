@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.6.3"
+APP_VERSION = "2.6.4"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))

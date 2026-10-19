@@ -224,8 +224,12 @@ async def legacy_ajax(request: Request):
     WRITES.append(("services", eid, form))
     i = 0
     while f"col{i}" in form:
-        want = int(form.get(f"count{i}") or 0) if form.get(f"val{i}") == "checked" else 0
-        set_service_count(eid, int(form[f"col{i}"]), want)
+        # Wie beobachtet am echten CT: entfernt wird nur mit Anzahl "0"; leere Anzahl ohne val
+        # (Dienst war nie im Event) aendert nichts.
+        if form.get(f"val{i}") == "checked":
+            set_service_count(eid, int(form[f"col{i}"]), int(form.get(f"count{i}") or 0))
+        elif form.get(f"count{i}") == "0":
+            set_service_count(eid, int(form[f"col{i}"]), 0)
         i += 1
     return {"status": "success", "data": None}
 

@@ -209,12 +209,12 @@ def test_service_setup_add_and_remove(client, fake_ct_url):
     writes = httpx.get(f"{fake_ct_url}/test/writes").json()
     form = [w for w in writes if w[0] == "services"][-1][2]
     assert form == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": "2", "val0": "checked"}
-    # wieder entfernen: ohne val, leere Anzahl (wie die CT-Weboberflaeche)
+    # wieder entfernen: ohne val, Anzahl "0" (wie die CT-Weboberflaeche beim Entfernen)
     res = client.post("/api/events/1003/servicesetup", headers=H,
                       json={"group_id": 32, "changes": [{"service_id": 10, "count": 0}]}).json()
     assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]
     form = [w for w in httpx.get(f"{fake_ct_url}/test/writes").json() if w[0] == "services"][-1][2]
-    assert form == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": ""}
+    assert form == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": "0"}
     # Dienste ausserhalb der Technik-Gruppe werden abgelehnt
     r = client.post("/api/events/1003/servicesetup", headers=H, json={"changes": [{"service_id": 3, "count": 1}]})
     assert r.status_code == 400
@@ -269,5 +269,5 @@ def test_service_setup_rest_removes_via_ajax(client, fake_ct_url):
         app_mod.CONFIG["service_setup_api"] = "ajax"
     new = httpx.get(f"{fake_ct_url}/test/writes").json()[n_before:]
     assert [w[0] for w in new] == ["services"]
-    assert new[0][2] == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": ""}
+    assert new[0][2] == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": "0"}
     assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]

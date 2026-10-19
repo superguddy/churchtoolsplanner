@@ -91,8 +91,10 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - **Dienste zu einem Event hinzufügen/entfernen** (V2.6.0): keine REST-Route vorhanden. Die
   CT-Weboberfläche selbst schickt (Aufzeichnung Nutzer 18.10.2026, F12 → Netzwerk) `POST /?q=churchservice/ajax`
   als Formular: `func=addOrRemoveServiceToEvent`, `id=<eventId>`, je Dienst `colN=<serviceId>`,
-  `valN=checked` (nur wenn aktiv) und `countN=<Anzahl>` (leer wenn nicht aktiv); sie schickt alle Dienste
-  EINER Dienstgruppe. Wir schicken nur die geänderten Dienste (`ChurchToolsClient.set_event_services`),
+  `valN=checked` (nur wenn aktiv) und `countN=<Anzahl>`; sie schickt alle Dienste EINER Dienstgruppe.
+  WICHTIG (Aufzeichnung Entfernen 19.10.2026): Ein bisher aktiver Dienst wird mit `countN=0` (ohne valN)
+  entfernt; leeres `countN` steht nur bei Diensten, die schon vorher nicht im Event waren. Mit leerem
+  countN entfernte CT den Dienst NICHT (Anfragen wurden nur ungültig) – Fehler bis V2.6.3. Wir schicken nur die geänderten Dienste (`ChurchToolsClient.set_event_services`),
   damit nichts versehentlich entfernt wird. RISIKO: ChurchTools schaltet `churchservice/ajax` schrittweise
   ab (Academy „Discontinued and deleted APIs“). Fällt die Funktion weg, Fehlermeldung beachten und die neue
   Anfrage der CT-Oberfläche erneut aufzeichnen lassen. Am echten CT noch nicht über den Planer getestet.
@@ -127,6 +129,7 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
 ## Aktueller Stand (19.10.2026)
+- V2.6.4: Dienst entfernen schickt `countN=0` statt leer (wie CT-Oberfläche). 49 Tests grün.
 - V2.6.3: Im REST-Modus Entfernen/Verkleinern von Diensten über churchservice/ajax (REST entfernt
   nicht). Browser-Test für Praktikanten setzt die Testdaten zurück (war datumsabhängig). 49 Tests grün.
 - V2.6.2: Events nur noch per from+to laden (vorher wurde `to` wegen direction ignoriert), REST-Variante

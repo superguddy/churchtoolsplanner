@@ -157,7 +157,9 @@ class ChurchToolsClient:
         data: dict[str, str] = {"func": "addOrRemoveServiceToEvent", "id": str(event_id)}
         for i, (service_id, count) in enumerate(changes):
             data[f"col{i}"] = str(service_id)
-            data[f"count{i}"] = str(count) if count > 0 else ""
+            # Entfernen = Anzahl "0" ohne valN (Aufzeichnung CT-Oberflaeche 19.10.2026). Leere Anzahl
+            # schickt CT nur fuer Dienste, die schon vorher nicht im Event waren; damit entfernt CT nichts.
+            data[f"count{i}"] = str(count)
             if count > 0:
                 data[f"val{i}"] = "checked"
         resp = self._request("POST", "/", params={"q": "churchservice/ajax"}, data=data, headers=self._write_headers())

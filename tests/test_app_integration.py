@@ -250,3 +250,24 @@ def test_events_loaded_by_range_without_paging(client, fake_ct_url):
     client.get("/api/events")
     queries = httpx.get(f"{fake_ct_url}/test/event_queries").json()
     assert queries and all("direction" not in q and "to" in q for q in queries)
+
+
+def test_service_setup_rest_removes_via_ajax(client, fake_ct_url):
+    """REST entfernt am echten CT keine Dienste -> Entfernen laeuft ueber churchservice/ajax."""
+    import sys
+
+    import httpx
+    app_mod = sys.modules["app"]
+    app_mod.CONFIG["service_setup_api"] = "rest"
+    try:
+        client.post("/api/events/1003/servicesetup", headers=H,
+                    json={"group_id": 32, "changes": [{"service_id": 10, "count": 2}]})
+        n_before = len(httpx.get(f"{fake_ct_url}/test/writes").json())
+        res = client.post("/api/events/1003/servicesetup", headers=H,
+                          json={"group_id": 32, "changes": [{"service_id": 10, "count": 0}]}).json()
+    finally:
+        app_mod.CONFIG["service_setup_api"] = "ajax"
+    new = httpx.get(f"{fake_ct_url}/test/writes").json()[n_before:]
+    assert [w[0] for w in new] == ["services"]
+    assert new[0][2] == {"func": "addOrRemoveServiceToEvent", "id": "1003", "col0": "10", "count0": ""}
+    assert not [s for s in res["view"]["services"] if s["label"] == "Podcast"]

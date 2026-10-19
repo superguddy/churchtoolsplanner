@@ -103,6 +103,9 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
   (`planner.event_service_counts` + Änderungen). Schalter config `service_setup_api`: `"ajax"` (Standard,
   wie CT-Oberfläche) oder `"rest"` (am echten CT noch ungetestet; erst an einem Test-Event prüfen).
   Restrisiko: Dienste aus Dienstgruppen, die der angemeldete Nutzer nicht sieht, fehlen im Soll-Stand.
+  Test Nutzer 19.10.2026 mit "rest": Hinzufügen funktioniert; Entfernen (count 0) NICHT – CT macht die
+  Anfragen nur ungültig (Planer zeigt den Dienst nicht mehr), im CT bleibt der Dienst aber aktiv.
+  Seit V2.6.3 laufen darum Entfernen/Verkleinern auch im REST-Modus über churchservice/ajax.
 - **GET /events** (laut Doku): from+to = ganzer Zeitraum, page/limit ignoriert, `to` inklusive (wird
   später exklusiv); from+direction = seitenweise, dann wird `to` ignoriert. Bis V2.6.1 schickten wir
   direction UND to → CT lieferte alle künftigen Events (bis 200 Seiten). Seit V2.6.2 nur from+to, eine
@@ -123,7 +126,9 @@ Oberfläche im Browser, Start über `.bat`-Dateien mit zentraler `.venv`.
 - CSRF-Token wird mitgeschickt, wenn `/api/csrftoken` einen liefert; sonst ohne.
 - Seitengrösse bei Gruppenmitgliedern/Abwesenheiten: wir folgen `meta.pagination`.
 
-## Aktueller Stand (18.10.2026)
+## Aktueller Stand (19.10.2026)
+- V2.6.3: Im REST-Modus Entfernen/Verkleinern von Diensten über churchservice/ajax (REST entfernt
+  nicht). Browser-Test für Praktikanten setzt die Testdaten zurück (war datumsabhängig). 49 Tests grün.
 - V2.6.2: Events nur noch per from+to laden (vorher wurde `to` wegen direction ignoriert), REST-Variante
   für „Dienste bearbeiten“ (config `service_setup_api`, Standard weiter "ajax"), Absage schickt
   `{"comment": null}`. 48 Tests grün.

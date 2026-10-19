@@ -24,7 +24,7 @@ import rules as rules_mod
 from ct_api import ChurchToolsClient, ChurchToolsError
 from login_store import LoginStore, dpapi_available
 
-APP_VERSION = "2.6.2"
+APP_VERSION = "2.6.3"
 APP_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(os.environ.get("CT_PLANNER_TOOL_DIR")
                 or (r"C:\ChurchToolsPlanner\Tool" if os.name == "nt" else str(APP_DIR / "Tool")))
@@ -633,10 +633,20 @@ def api_service_setup_save(event_id: int, body: ServiceSetupBody) -> dict:
     if bad:
         raise HTTPException(status_code=400, detail=f"Dienst(e) {bad} koennen hier nicht geaendert werden.")
     if CONFIG.get("service_setup_api") == "rest":
+        # Am echten CT (19.10.2026): REST mit count 0 entfernt den Dienst NICHT (Anfragen werden nur
+        # ungueltig, der Dienst bleibt im Event aktiv). Entfernen/Verkleinern darum immer ueber den
+        # Weg der CT-Weboberflaeche, nur Hinzufuegen/Vergroessern ueber REST.
         SESSION.invalidate("event")
-        counts = planner.event_service_counts(event_detail(event_id))
-        counts.update(dict(changes))
-        client.set_event_services_rest(event_id, counts)
+        current = planner.event_service_counts(event_detail(event_id))
+        shrink = [(sid, n) for sid, n in changes if n < current.get(sid, 0)]
+        grow = [(sid, n) for sid, n in changes if n >= current.get(sid, 0)]
+        if shrink:
+            client.set_event_services(event_id, shrink)
+        if grow:
+            SESSION.invalidate("event")
+            counts = planner.event_service_counts(event_detail(event_id))
+            counts.update(dict(grow))
+            client.set_event_services_rest(event_id, counts)
     else:
         client.set_event_services(event_id, changes)
     SESSION.invalidate("event", "history", "events", "month")

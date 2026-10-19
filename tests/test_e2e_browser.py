@@ -166,6 +166,11 @@ def test_month_page_apply_suggestions_and_save(page, planner_url):
 
 
 def test_intern_flag_blocks_normal_service(page, planner_url):
+    # Der Monatstest davor teilt Personen in Events ein; liegen beide Sonntage im selben Monat,
+    # waere Pia sonst schon eingeteilt bzw. am Limit -> Testdaten zuruecksetzen.
+    import fake_ct
+    fake_ct.reset()
+    page.request.post(planner_url + "api/reload", headers={"X-Planner": "1"})
     page.goto(planner_url + "regeln")
     page.wait_for_selector("tr#p3010")
     page.locator("tr#p3010 .internflag input").check()
